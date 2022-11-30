@@ -1,0 +1,134 @@
+<?xml version="1.0" ?>
+<argos-configuration>
+    
+    <!-- ************************* -->
+    <!-- * General configuration * -->
+    <!-- ************************* -->
+    <framework>
+        <system threads="6" />
+        <experiment length="__TIMEEXPERIMENT__"
+        ticks_per_second="10"
+        random_seed="__SEED__" />
+    </framework>
+    
+    <!-- *************** -->
+    <!-- * Controllers * -->
+    <!-- *************** -->
+    <controllers>
+        
+        <kilobot_controller id="listener">
+            <actuators>
+                <differential_steering implementation="default"
+                bias_avg="0.0"
+                bias_stddev="0.0"
+                factor_avg="1"
+                factor_stddev="0.00010"
+                />
+                <kilobot_led implementation="default" />
+                <kilobot_communication implementation="default" />
+            </actuators>
+            <sensors>
+                <kilobot_communication implementation="default" medium="kilocomm" show_rays="true" />
+            </sensors>
+            <params behavior="build/examples/behaviors/crwlevy_with_positioning" />
+        </kilobot_controller>
+        
+    </controllers>
+
+    <!-- ****************** -->
+    <!-- * Loop functions * -->
+    <!-- ****************** -->
+
+    <loop_functions 
+        library="build/examples/loop_functions/ARK_loop_functions/crwlevy_with_positioning/libALF_crwlevy_positioning_loop_function"
+        label="ALF_crwlevy_positioning_loop_function" >
+     
+        <tracking
+            position="true" 
+            orientation="false"
+            color="true">
+        </tracking>
+
+        
+            <!-- initialization = "true" -->
+        <variables
+            datafilename="__OUTPUT__"
+            positionsfilename="__POSOUTPUT__"
+            dataacquisitionfrequency="100"  
+            environmentplotupdatefrequency="1"
+            timeforonemessage="0.05"
+            crw = "__CRW__"
+            levy = "__LEVY__"
+            bias_prob = "__BIASPROB__"
+            experiment_type="__EXPERIMENT__">
+        </variables>
+    
+        <environments>
+            <Area position="0,0" radius="0.033" color="255,0,0,125" >
+            </Area>
+            <Perimeter radius="__RADIUS__" width="0.02" height="0.05" walls="__NUMWALLS__">
+            </Perimeter>
+        </environments>
+    
+    </loop_functions>
+
+
+    <!-- *********************** -->
+    <!-- * Arena configuration * -->
+    <!-- *********************** -->
+    <arena size="__ARENASIZE__" center="0,0,0.5" pixel_per_meter="50">
+
+        <distribute>
+            <position method="uniform" min="0.2,0.2,0" max="0.7,0.7,0" />
+            <orientation method="uniform" min="0,0,0" max="360,0,0" />
+            <entity quantity="__NUMROBOTS__" max_trials="100">
+                <kilobot id="kb">
+                    <controller config="listener"/> <dynamics2d friction="0.7" />
+                </kilobot>
+            </entity>
+        </distribute>  
+
+        <floor id="floor"
+        source="loop_functions"
+        pixels_per_meter="50" />
+        
+    </arena>
+    
+    <!-- ******************* -->
+    <!-- * Physics engines * -->
+    <!-- ******************* -->
+    <physics_engines>
+        <dynamics2d id="dyn2d" />
+    </physics_engines>
+    
+    <!-- ********* -->
+    <!-- * Media * -->
+    <!-- ********* -->
+    
+    <media>
+        <kilobot_communication id="kilocomm" />
+    </media>
+    
+    <!-- ****************** -->
+    <!-- * Visualization  * -->
+    <!-- ****************** -->
+    <!-- <visualization>
+        <qt-opengl>
+            <frame_grabbing directory="./LMCRW_img" base_name="LMCRW_" format="png" quality="100" headless_grabbing="false" headless_frame_size="1600x1200" headless_frame_rate="330" />
+            <camera>
+                <placement idx="0" position="0.0,-0.00001,0.5" look_at="0,0,0" lens_focal_length="12" />
+                <placement idx="1" position="0.25,0.25,0.3" look_at="0.25,0.25,0" lens_focal_length="12" />
+                <placement idx="2" position="-0.25,0.25,0.3" look_at="-0.25,0.25,0" lens_focal_length="12" />
+                <placement idx="3" position="-0.25,-0.25,0.3" look_at="-0.25,-0.25,0" lens_focal_length="12" />
+                <placement idx="4" position="0.25,-0.25,0.3" look_at="0.25,-0.25,0" lens_focal_length="12" />
+                <placement idx="5" position="0,-1,1" look_at="0,0,0" lens_focal_length="15" />
+                <placement idx="6" position="0,0,0.5" look_at="0,0,0" lens_focal_length="12" />
+                <placement idx="7" position="-1,0,1" look_at="0,0,0" lens_focal_length="15" />
+                <placement idx="8" position="-1,1,1" look_at="0,0,0" lens_focal_length="15" />
+                <placement idx="9" position="-0.0229259,-0.177184,0.0725521" look_at="-0.0273839,-0.812385,0.0624333" lens_focal_length="20" />
+                <placement idx="10" position="-0.0229259,-0.177184,0.0725521" look_at="-0.0273839,0.812385,0.0624333" lens_focal_length="20" />
+            </camera>
+        </qt-opengl>
+    </visualization> -->
+    
+</argos-configuration>
