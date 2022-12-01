@@ -6,9 +6,9 @@
     <!-- ************************* -->
     <framework>
         <system threads="4" />
-        <experiment length="200"
+        <experiment length="600"
         ticks_per_second="10"
-        random_seed="14" />
+        random_seed="21545" />
     </framework>
     
     <!-- *************** -->
@@ -51,8 +51,8 @@
 
         
         <variables
-            crw = "0.8"
-            levy = "1.5"
+            crw = "0.9"
+            levy = "1.0"
             datafilename="data_file.txt"
             positionsfilename="kiloLog.txt"
             dataacquisitionfrequency="100"  
@@ -61,9 +61,9 @@
         </variables>
     
         <environments>
-            <Area position="0,0" radius="0.1" color="255,0,0,125" >
+            <Area position="0,0" radius="0.033" color="255,0,0,125" >
             </Area>
-            <Perimeter radius="1" width="0.01" height="0.05" walls="100">
+            <Perimeter radius="0.5" width="0.01" height="0.05" walls="100">
             </Perimeter>
         </environments>
     
@@ -73,13 +73,13 @@
     <!-- *********************** -->
     <!-- * Arena configuration * -->
     <!-- *********************** -->
-    <arena size="2, 2, 4" center="0,0,0.5" pixel_per_meter="200">
+    <arena size="1, 1, 4" center="0,0,0.5" pixel_per_meter="100">
         
 
         <distribute>
-            <position method="uniform" min="0.2,0.2,0" max="0.7,0.7,0" />
+            <position method="uniform" min="-0.4,-0.4,0" max="0.4,0.4,0" />
             <orientation method="uniform" min="0,0,0" max="360,0,0" />
-            <entity quantity="5" max_trials="100">
+            <entity quantity="10" max_trials="100">
                 <kilobot id="kb">
                     <controller config="listener"/> <dynamics2d friction="0.7" />
                 </kilobot>
@@ -113,8 +113,8 @@
     <visualization>
         <qt-opengl>
             <camera>
-                <placement idx="0" position="0,0,1" look_at="0,0,0" lens_focal_length="12" />
-                <placement idx="1" position="0,0,1" look_at="0,0,0" lens_focal_length="12" />
+                <placement idx="0" position="0,-0.00001,.5" look_at="0,0,0" lens_focal_length="12" />
+                <placement idx="1" position="0,-0.00001,.5" look_at="0,0,0" lens_focal_length="15" />
                 <placement idx="2" position="0,1,1" look_at="0,0,0" lens_focal_length="15" />
                 <placement idx="3" position="1,1,1" look_at="0,0,0" lens_focal_length="15" />
                 <placement idx="4" position="1,0,1" look_at="0,0,0" lens_focal_length="15" />

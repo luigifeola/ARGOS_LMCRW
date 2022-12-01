@@ -9,6 +9,7 @@ class CSimulator;
 #include <math.h>
 #include <time.h>
 #include <bitset>
+#include <numeric>
 
 #include <argos3/core/simulator/loop_functions.h>
 #include <argos3/plugins/robots/kilobot/simulator/ALF.h>
@@ -45,12 +46,6 @@ class CSimulator;
 
 using namespace argos;
 
-enum bias_command {
-    LEFT = 1,
-    RIGHT = 2,
-    STOP = 3
-};
-
 enum Experiment_type {
     SIMPLE_EXPERIMENT = 1,
     OBSTACLE_AVOIDANCE_EXPERIMENT = 2,
@@ -76,6 +71,9 @@ public:
 
     virtual void PostExperiment();
 
+    /** Log Kilobot pose and state */
+    void KiloLOG();
+
     /** Setup the initial state of the Kilobots in the space */
     void SetupInitialKilobotStates();
 
@@ -97,6 +95,11 @@ public:
     /** Get the message to send to a Kilobot according to its position */
     void UpdateVirtualSensor(CKilobotEntity& c_kilobot_entity);
 
+    /** 2D vector rotation */
+    CVector2 VectorRotation2D(Real angle, CVector2 vec);
+
+    /** Simulate proximity sensor*/
+    std::vector<int> Proximity_sensor(CVector2 obstacle_direction, Real kOrientation, int num_sectors);
 
     /** Print Kilobot Position */
     void PrintVecPos(std::vector<CVector2> vecKilobotsPositions);
@@ -104,18 +107,10 @@ public:
     /** Print Kilobot State */
     void PrintKilobotState(CKilobotEntity& c_kilobot_entity);
 
-    /** Print Kilobot Command */
-    void PrintKilobotCommand(int command);
-
     /** Used to plot the Virtual environment on the floor */
     virtual CColor GetFloorColor(const CVector2& vec_position_on_plane);
 
-    CRadians GetBearingRobotPosition(CKilobotEntity& c_kilobot_entity);
-
 private:
-
-    UInt32 num_robots_with_discovery;
-    UInt32 num_robots_with_info;
     
     
     /************************************/
@@ -148,25 +143,29 @@ private:
         NOT_TARGET_FOUND=0,
         TARGET_FOUND=1,
         TARGET_COMMUNICATED=2,
-        BIASING=3,
-        COLLIDING = 4,
     } SRobotState;
+
+    typedef enum
+    {
+        STATE_MESSAGE=0,
+        PROXIMITY_MESSAGE=1,
+        RANDOM_ANGLE_MESSAGE=2,
+        BIAS_MESSAGE=3,
+    } MESSAGE_TYPE;
 
 
     /* used to store the state of each kilobot */
     std::vector<SRobotState> m_vecKilobotStates;
     std::vector<CVector2> m_vecKilobotsPositions;
     std::vector<CRadians> m_vecKilobotsOrientations;
-    std::vector<CRadians> m_vecKilobotsBiasAngle; //bias angle command in radians
-
-    // std::vector<Real> m_vecLastTimeMessaged;
-    // Real m_fMinTimeBetweenTwoMsg;
+    std::vector<Real> m_vecFirstPassageTime;
+    std::vector<Real> m_vecConvergenceTime;
 
     /* Flag to start the experiment */
     /** Flag to check if kilobot is arrived in its initial desired position */
-    std::vector<bool>  v_recivedCoefficients;
+    std::vector<bool>  v_receivedCoefficients;
 
-    bool start_experiment;
+    bool experiment_started;
     Real start_experiment_time;
     int internal_counter;
 
@@ -176,8 +175,11 @@ private:
   
     /* random number generator */
     CRandom::CRNG* c_rng;
+    
+    std::vector<Real> m_vecLastTimeMessaged;
+    Real m_fMinTimeBetweenTwoMsg;
 
-    /* crwlevy exponents */
+    /* alpha-rho exponents */
     Real crw_exponent;
     Real levy_exponent;
 
