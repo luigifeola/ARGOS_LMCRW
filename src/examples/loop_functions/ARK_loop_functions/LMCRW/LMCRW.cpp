@@ -226,6 +226,8 @@ void LMCRW::GetExperimentVariables(TConfigurationNode& t_tree){
     /* Get the crwlevy exponents */
     GetNodeAttribute(tExperimentVariablesNode, "crw", crw_exponent);
     GetNodeAttribute(tExperimentVariablesNode, "levy", levy_exponent);
+    /* Get the crwlevy exponents */
+    GetNodeAttributeOrDefault(tExperimentVariablesNode, "experiment", exp_type, exp_type);
     /* Get the positions datafile name to store Kilobot positions in time */
     GetNodeAttribute(tExperimentVariablesNode, "positionsfilename", m_kiloOutputFileName);
     /* Get the output datafile name and open it */
@@ -383,62 +385,64 @@ void LMCRW::UpdateVirtualSensor(CKilobotEntity &c_kilobot_entity){
     // std::cerr<<"fDistance: "<<fDistance<<std::endl;
     // std::cerr<<"vDistance_threshold: "<<vDistance_threshold<<std::endl;
 
-    if (fDistance > vDistance_threshold)
+    if (fDistance > vDistance_threshold && exp_type!="simple_experiment")
     {
-        //TODO: set a variable to switch bouncing or random angle experiment 
-
+        /************************************************************************************************************************/
         /** Bouncing ANGLE*/
-        // std::vector<int> proximity_vec;
-        // CRadians collision_angle = ATan2(m_vecKilobotsPositions[unKilobotID].GetY(), m_vecKilobotsPositions[unKilobotID].GetX());
-        // CVector2 collision_direction = CVector2(vDistance_threshold * Cos(collision_angle + CRadians(M_PI)), vDistance_threshold * Sin(collision_angle + CRadians(M_PI))).Normalize();
-        // // std::cout << "collision angle: " << collision_angle << std::endl;
-        // // std::cout << "collision direction: " << collision_direction << std::endl;
-        // proximity_vec = Proximity_sensor(collision_direction, m_vecKilobotsOrientations[unKilobotID].GetValue(), kProximity_bits);
-        // proximity_sensor_dec = std::accumulate(proximity_vec.begin(), proximity_vec.end(), 0, [](int x, int y)
-        //                                        { return (x << 1) + y; });
-        // /* To turn off the wall avoidance uncomment the following line */
-        // //proximity_sensor_dec = 0;
+        if(exp_type == "bouncing"){
+            std::vector<int> proximity_vec;
+            CRadians collision_angle = ATan2(m_vecKilobotsPositions[unKilobotID].GetY(), m_vecKilobotsPositions[unKilobotID].GetX());
+            CVector2 collision_direction = CVector2(vDistance_threshold * Cos(collision_angle + CRadians(M_PI)), vDistance_threshold * Sin(collision_angle + CRadians(M_PI))).Normalize();
+            proximity_vec = Proximity_sensor(collision_direction, m_vecKilobotsOrientations[unKilobotID].GetValue(), kProximity_bits);
+            proximity_sensor_dec = std::accumulate(proximity_vec.begin(), proximity_vec.end(), 0, [](int x, int y)
+                                                { return (x << 1) + y; });
+            /* To turn off the wall avoidance uncomment the following line */
+            //proximity_sensor_dec = 0;
 
-        // /** Print proximity values */
-        // // std::cerr << "kID:" << unKilobotID << " sensor ";
-        // // for (int item : proximity_vec)
-        // // {
-        // //     std::cerr << item << '\t';
-        // // }
-        // // std::cerr << std::endl;
+            /** Print proximity values */
+            // std::cerr << "kID:" << unKilobotID << " sensor ";
+            // for (int item : proximity_vec)
+            // {
+            //     std::cout << item << '\t';
+            // }
+            // std::cout << std::endl;
 
-        // std::cout<<"******Prox dec: "<<proximity_sensor_dec<<std::endl;
-        
-        // tKilobotMessage.m_sID = unKilobotID;
-        // tKilobotMessage.m_sType = PROXIMITY_MESSAGE;
-        // tKilobotMessage.m_sData = proximity_sensor_dec;
-
-        /** RANDOM ANGLE */
-        CRadians home_angle = ATan2(-m_vecKilobotsPositions[unKilobotID].GetY(), -m_vecKilobotsPositions[unKilobotID].GetX()) - m_vecKilobotsOrientations[unKilobotID];
-        // std::cout << "random_angle: " << random_angle.RADIANS_TO_DEGREES << '\t';
-        random_angle = CRadians(c_rng->Uniform(CRange<Real>(-CRadians::PI_OVER_TWO.GetValue(), CRadians::PI_OVER_TWO.GetValue())));
-        // std::cout << "\nhome_angle: " << home_angle << '\n';
-        // std::cout << "random_angle: " << random_angle << "\n";
-        random_angle += home_angle;
-        random_angle.SignedNormalize(); //map angle in [-pi,pi]
-        // std::cout << "Total angle: " << random_angle << "\n\n";
-
-        if(home_angle.SignedNormalize().GetAbsoluteValue() > M_PI_2)
-        {
-            // std::cout << "SignedNormalize: " << random_angle <<std::endl;
-
+            // std::cout<<"******Prox dec: "<<proximity_sensor_dec<<std::endl;
+            
             tKilobotMessage.m_sID = unKilobotID;
-            tKilobotMessage.m_sType = RANDOM_ANGLE_MESSAGE;
+            tKilobotMessage.m_sType = PROXIMITY_MESSAGE;
+            tKilobotMessage.m_sData = proximity_sensor_dec;
+        }
+        /************************************************************************************************************************/
 
-            if(random_angle.GetValue() >= 0)
-                tKilobotMessage.m_sData = (UInt8) round ((127.0 / M_PI) * random_angle.GetValue());
-            else
+        /************************************************************************************************************************/
+        /** RANDOM ANGLE */
+        else if (exp_type == "random_angle") {
+            CRadians home_angle = ATan2(-m_vecKilobotsPositions[unKilobotID].GetY(), -m_vecKilobotsPositions[unKilobotID].GetX()) - m_vecKilobotsOrientations[unKilobotID];
+            // std::cout << "random_angle: " << random_angle.RADIANS_TO_DEGREES << '\t';
+            random_angle = CRadians(c_rng->Uniform(CRange<Real>(-CRadians::PI_OVER_TWO.GetValue(), CRadians::PI_OVER_TWO.GetValue())));
+            random_angle += home_angle;
+            random_angle.SignedNormalize(); //map angle in [-pi,pi]
+
+            if(home_angle.SignedNormalize().GetAbsoluteValue() > M_PI_2)
             {
-                tKilobotMessage.m_sData = (UInt8) round ((127.0 / M_PI) * random_angle.GetAbsoluteValue());
-                tKilobotMessage.m_sData = tKilobotMessage.m_sData | 1 << 7;
+                tKilobotMessage.m_sID = unKilobotID;
+                tKilobotMessage.m_sType = RANDOM_ANGLE_MESSAGE;
+
+                if(random_angle.GetValue() >= 0)
+                    tKilobotMessage.m_sData = (UInt8) round ((127.0 / M_PI) * random_angle.GetValue());
+                else
+                {
+                    tKilobotMessage.m_sData = (UInt8) round ((127.0 / M_PI) * random_angle.GetAbsoluteValue());
+                    tKilobotMessage.m_sData = tKilobotMessage.m_sData | 1 << 7;
+                }
+                std::bitset<8> b1 (tKilobotMessage.m_sData);
             }
-            std::bitset<8> b1 (tKilobotMessage.m_sData);
-            // std::cout << "tKilobotMessage.m_sData: " << b1 << "  " << tKilobotMessage.m_sData <<std::endl;
+        }
+        /************************************************************************************************************************/
+
+        else{
+            std::cout<<"****WARNING!!***\n" << exp_type << " is a NOT EXISTING experiment!!!\n";
         }
     }
 

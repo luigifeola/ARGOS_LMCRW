@@ -6,9 +6,9 @@
     <!-- ************************* -->
     <framework>
         <system threads="4" />
-        <experiment length="600"
+        <experiment length="6000"
         ticks_per_second="10"
-        random_seed="21545" />
+        random_seed="3241548" />
     </framework>
     
     <!-- *************** -->
@@ -49,15 +49,16 @@
             color="true">
         </tracking>
 
-        
+        <!-- experiment could be "simple_experiment" "bouncing" "random_angle" "open_space" -->
         <variables
-            crw = "0.9"
-            levy = "1.0"
+            crw = "0.2"
+            levy = "1.8"
             datafilename="data_file.txt"
             positionsfilename="kiloLog.txt"
             dataacquisitionfrequency="100"  
             environmentplotupdatefrequency="1"
-            timeforonemessage="0.05">
+            timeforonemessage="0.05"
+            experiment="simple_experiment">
         </variables>
     
         <environments>

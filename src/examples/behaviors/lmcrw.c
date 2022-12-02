@@ -30,6 +30,7 @@ typedef enum {
   TURN_RIGHT = 2,
   STOP = 3,
   RANDOM_ROTATION = 4,
+  BOUNCING_ANGLE = 5,
 } motion_t;
 
 /* Enum for boolean flags */
@@ -105,12 +106,12 @@ double crw_exponent = -1;
 
 /***********WALL AVOIDANCE***********/
 // the kb is "equipped" with a proximity sensor
-const uint8_t sector_base = (pow(2, COLLISION_BITS / 2) - 1);
+uint8_t sector_base = 0;
 uint8_t left_side = 0;
 uint8_t right_side = 0;
 uint8_t proximity_sensor = 0;
-Free_space free_space = LEFT;
-bool wall_avoidance_start = false;
+uint32_t bouncing_ticks = 0;
+uint32_t straight_ticks_backup = 0;
 
 uint32_t last_motion_ticks = 0;
 /* counters for broadcast a message */
@@ -258,52 +259,27 @@ uint8_t countOnes(uint8_t n)
 /*-------------------------------------------------------------------*/
 /* Function implementing wall avoidance procedure                    */
 /*-------------------------------------------------------------------*/
-void wall_avoidance_procedure(uint8_t sensor_readings)
+uint32_t wall_avoidance_procedure(uint8_t sensor_readings)
 {
-  right_side = sensor_readings & sector_base;
-  left_side = (sensor_readings >> (COLLISION_BITS / 2)) & sector_base;
-
   uint8_t count_ones = countOnes(sensor_readings);
-  if (count_ones > SECTORS_IN_COLLISION)
-  {
-    if (right_side < left_side)
-    {
-      // set_color(RGB(0,0,3));
-      set_motion(TURN_RIGHT);
-      free_space = RIGHT;
+  if (count_ones > SECTORS_IN_COLLISION){
+    right_side = sensor_readings & sector_base;
+    left_side = (sensor_readings >> (COLLISION_BITS / 2)) & sector_base;
+
+    if (right_side < left_side){
+      rotation_direction = RIGHT;
     }
-    else if (right_side > left_side)
-    {
-      // set_color(RGB(3,0,0));
-      set_motion(TURN_LEFT);
-      free_space = LEFT;
+    else{
+      rotation_direction = LEFT;
     }
 
-    else
-    {
-      // set_color(RGB(0,3,0));
-      // random rotation strategy
-      // if (rand_soft() % 2)
-      // {
-      //   set_motion(TURN_LEFT);
-      // }
-      // else
-      // {
-      //   set_motion(TURN_RIGHT);
-      // }
-      // rotate towards the last free space kept in memory
-      set_motion(free_space);
-    }
-    if (kilo_ticks > last_motion_ticks + turning_ticks)
-    {
-      turning_ticks = (uint32_t)((M_PI / COLLISION_BITS) * max_turning_ticks);
-      straight_ticks = (uint32_t)(fabs(levy(std_motion_steps, levy_exponent)));
-    }
+    current_motion_type = BOUNCING_ANGLE;
+    return (uint32_t) ( ((float)count_ones / (float)COLLISION_BITS)  * max_turning_ticks);
   }
-  // else
-  // {
-  //   set_color(RGB(0,3,0));
-  // }
+
+  else{
+    return 0;
+  }
 }
 
 /*-------------------------------------------------------------------*/
@@ -396,8 +372,7 @@ void message_rx(message_t *msg, distance_measurement_t *d) {
     break;
   }
 
-  case ARK_MSG:
-  {
+  case ARK_MSG: {
     // unpack message
     int id1 = msg->data[0] << 2 | (msg->data[1] >> 6);
     int id2 = msg->data[3] << 2 | (msg->data[4] >> 6);
@@ -424,45 +399,36 @@ void message_rx(message_t *msg, distance_measurement_t *d) {
         new_sa_msg = true;
     }
 
-    if(new_sa_msg==true)
-    {
-      if(sa_type==PROXIMITY_MESSAGE && sa_payload!=0)
-      {
-        /*wall avoidance*/
-      proximity_sensor = sa_payload;
-      wall_avoidance_start = true;
-      }
-
-      else if(sa_type==STATE_MESSAGE)
-      {
+    if(new_sa_msg==true) {
+      if(sa_type==STATE_MESSAGE){
         current_state=DISCOVERED_TARGET;
         new_information = true;
         set_color(RGB(3, 0, 0));
       }
 
-      else if(sa_type==RANDOM_ANGLE_MESSAGE && rotation_amount == 0.0)
-      {
-        // printf("RANDOM ROTATION RECEIVED\n");
-        rotation_amount = (sa_payload & 0x7F) * M_PI / 127.0;
-        // printf("payload %d\n", sa_payload);
-        // printf("rotation_amount %f\t", rotation_amount);
-        if (((sa_payload >> 7) & 0x01) == 0)
-        {
-          rotation_direction = LEFT;
-          // printf("LEFT\n");
+      else if(sa_type==PROXIMITY_MESSAGE && sa_payload!=0 && bouncing_ticks==0){
+        /*wall avoidance*/
+        proximity_sensor = sa_payload;
+        bouncing_ticks = wall_avoidance_procedure(proximity_sensor);
+        if (bouncing_ticks != 0){
+          current_motion_type = BOUNCING_ANGLE;
+          if (kilo_ticks < last_motion_ticks + straight_ticks) {
+            straight_ticks_backup = straight_ticks - (kilo_ticks - last_motion_ticks);
+          }
         }
-        else
-        {
+      }
+
+      else if(sa_type==RANDOM_ANGLE_MESSAGE && rotation_amount == 0.0){
+        rotation_amount = (sa_payload & 0x7F) * M_PI / 127.0;
+        if (((sa_payload >> 7) & 0x01) == 0){
+          rotation_direction = LEFT;
+        }
+        else{
           rotation_direction = RIGHT;
-          // printf("RIGHT\n");
         }
 
         current_motion_type = RANDOM_ROTATION;
-
       }
-
-
-
 
       new_sa_msg = false;
     }
@@ -531,10 +497,19 @@ void random_walk()
         /* start moving forward */
         last_motion_ticks = kilo_ticks;
 
-        if(rotation_amount != 0.0)
-        {
-          // printf("Zeroing the rotation amount\n");
+        if(rotation_amount != 0.0) {
           rotation_amount = 0.0;
+          straight_ticks = (uint32_t)(fabs(levy(std_motion_steps, levy_exponent)));
+        }
+
+        if(bouncing_ticks != 0.0) {
+          bouncing_ticks = 0.0;
+          if(straight_ticks_backup > 0){
+            straight_ticks = straight_ticks_backup;
+            straight_ticks_backup = 0;
+          }
+          else
+            straight_ticks = (uint32_t)(fabs(levy(std_motion_steps, levy_exponent)));
         }
 
         set_motion(FORWARD);
@@ -544,28 +519,23 @@ void random_walk()
     case FORWARD:
       // printf("FORWARD\n");
       /* if moved forward for enough time turn */
-      if (kilo_ticks > last_motion_ticks + straight_ticks) 
-      {
+      if (kilo_ticks > last_motion_ticks + straight_ticks){
         /* perform a random turn */
         last_motion_ticks = kilo_ticks;
         
-        if (rand_soft() % 2)
-        {
+        if (rand_soft() % 2){
           set_motion(TURN_LEFT);
         }
-        else
-        {
+        else{
           set_motion(TURN_RIGHT);
         }
         double angle = 0;
-        if(crw_exponent == 0) 
-        {
+        if(crw_exponent == 0) {
           angle = (uniform_distribution(0, (M_PI)));
           // my_printf("%" PRIu32 "\n", turning_ticks);
           // my_printf("%u" "\n", rand());
         }
-        else
-        {
+        else{
           angle = fabs(wrapped_cauchy_ppf(crw_exponent));
         }
         turning_ticks = (uint32_t)((angle / M_PI) * max_turning_ticks);
@@ -577,9 +547,15 @@ void random_walk()
     case RANDOM_ROTATION:
       set_motion(rotation_direction);
       current_motion_type = rotation_direction;
-      // printf("Rotating!!!!!!!!!!!!!!!!\n");
       last_motion_ticks = kilo_ticks;
-      turning_ticks = (uint32_t)((rotation_amount / (1.0 * M_PI)) * max_turning_ticks);
+      turning_ticks = (uint32_t)((rotation_amount / M_PI) * max_turning_ticks);
+      break;
+
+    case BOUNCING_ANGLE:
+      set_motion(rotation_direction);
+      current_motion_type = rotation_direction;
+      last_motion_ticks = kilo_ticks;
+      turning_ticks = bouncing_ticks;
       break;
 
 
@@ -589,44 +565,19 @@ void random_walk()
   }
 }
 
-
-
-
-/*-------------------------------------------------------------------*/
-/* Reset the experiment at start                                     */
-/*-------------------------------------------------------------------*/
-void check_reset()
-{
-  if (kilo_ticks == 0) // NOT THE RIGHT TEST, kilo_tick doesnt reinitiate?
-  {
-    setup();
-  }
-}
-
 /*-------------------------------------------------------------------*/
 /* Main loop                                                         */
 /*-------------------------------------------------------------------*/
 void loop()
-{
-  check_reset();
-  
+{  
   //turn on the right led color
   check_state();
-
-  if (wall_avoidance_start)
-  {
-    wall_avoidance_procedure(proximity_sensor);
-    proximity_sensor = 0;
-    wall_avoidance_start = false;
-  }
 
   if(crw_exponent!=-1 && levy_exponent!=-1)
   {
     random_walk();
     broadcast();  
   }
-  
-
 
 }
 
@@ -635,6 +586,8 @@ void loop()
 /*-------------------------------------------------------------------*/
 int main()
 {
+    sector_base =  pow(2, COLLISION_BITS / 2) - 1;
+    
     kilo_init();
     // register message reception callback
     kilo_message_rx = message_rx;

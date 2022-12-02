@@ -179,6 +179,9 @@ private:
     std::vector<Real> m_vecLastTimeMessaged;
     Real m_fMinTimeBetweenTwoMsg;
 
+    /* experiment type */
+    std::string exp_type;
+    
     /* alpha-rho exponents */
     Real crw_exponent;
     Real levy_exponent;
