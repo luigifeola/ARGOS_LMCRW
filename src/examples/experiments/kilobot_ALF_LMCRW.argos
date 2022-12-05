@@ -6,7 +6,7 @@
     <!-- ************************* -->
     <framework>
         <system threads="4" />
-        <experiment length="6000"
+        <experiment length="1800"
         ticks_per_second="10"
         random_seed="3241548" />
     </framework>
@@ -51,19 +51,20 @@
 
         <!-- experiment could be "simple_experiment" "bouncing" "random_angle" "open_space" -->
         <variables
-            crw = "0.2"
+            crw = "0.6"
             levy = "1.8"
             datafilename="data_file.txt"
             positionsfilename="kiloLog.txt"
             dataacquisitionfrequency="100"  
             environmentplotupdatefrequency="1"
             timeforonemessage="0.05"
-            experiment="simple_experiment">
+            experiment="bouncing"
+            kDistanceKilobotsFromTheOrigin="1.0">
         </variables>
     
         <environments>
-            <Area position="0,0" radius="0.033" color="255,0,0,125" >
-            </Area>
+            <Target position="0,0" radius="0.033" originDistance="0.25" color="255,0,0,125" >
+            </Target>
             <Perimeter radius="0.5" width="0.01" height="0.05" walls="100">
             </Perimeter>
         </environments>
@@ -74,7 +75,7 @@
     <!-- *********************** -->
     <!-- * Arena configuration * -->
     <!-- *********************** -->
-    <arena size="1, 1, 4" center="0,0,0.5" pixel_per_meter="100">
+    <arena size="5, 5, 4" center="0,0,0.5" pixel_per_meter="100">
         
 
         <distribute>

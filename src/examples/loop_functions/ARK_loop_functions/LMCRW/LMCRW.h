@@ -120,11 +120,12 @@ private:
     struct SVirtualArea
     {
         CVector2 Center;
+        Real OriginDistance;
         Real Radius;
         CColor Color;
     };
 
-    SVirtualArea m_sClusteringHub;
+    SVirtualArea Target;
     
     struct SVirtualPerimeter
     {
@@ -181,6 +182,7 @@ private:
 
     /* experiment type */
     std::string exp_type;
+    double kDistanceKilobotsFromTheOrigin = 0.0;
     
     /* alpha-rho exponents */
     Real crw_exponent;

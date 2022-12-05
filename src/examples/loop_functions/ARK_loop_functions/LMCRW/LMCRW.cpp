@@ -5,17 +5,13 @@
 namespace
 {
     const double kKiloDiameter = 0.033;
-    const double kDistanceTargetFromTheOrigin = 0.5;
-    const double kEpsilon = 0.0001;
+    const double kEpsilon = 0.005;
 
     /* walla voidance parameters */
     double vArena_size = -1.0;
     double vDistance_threshold = -1.0;
     const CVector2 left_direction(1.0, 0.0);
     const int kProximity_bits = 8;
-
-    //FIXME: maybe here in the namespace is not the better place
-    CRadians random_angle;
 
 }
 
@@ -86,10 +82,40 @@ void LMCRW::SetupInitialKilobotStates() {
     v_receivedCoefficients.resize(m_tKilobotEntities.size());
     std::fill(v_receivedCoefficients.begin(), v_receivedCoefficients.end(), false);
 
-    for(UInt16 it=0;it< m_tKilobotEntities.size();it++){
+    for(UInt8 it=0;it< m_tKilobotEntities.size();it++){
         /* Setup the virtual states of a kilobot(e.g. has food state)*/
         SetupInitialKilobotState(*m_tKilobotEntities[it]);
     }
+
+
+
+
+    /***** target positioning ********************************************************************************************************************************************/
+
+    //The experiment must start with no kilobot on top of the target
+    //In the following there is the collision check between target and each kilobot
+    Real c_random_angle;
+    CVector2 & c_position = Target.Center;
+    Real & c_radius = Target.Radius;
+    std::vector<CVector2>::iterator kilobot_on_the_top;
+
+    Real min_distance = exp_type != "open_space" ? 0.0 : Target.OriginDistance;
+    Real max_distance = exp_type != "open_space" ? (m_ArenaStructure.Radius - m_ArenaStructure.Wall_width - c_radius - kKiloDiameter) : Target.OriginDistance;
+    
+    do{
+        c_random_angle = c_rng->Uniform(CRange<Real>(-CRadians::PI.GetValue(), CRadians::PI.GetValue()));
+        c_position.SetX(c_rng->Uniform(CRange<Real>(min_distance, max_distance))  * sin(c_random_angle));
+        c_position.SetY(c_rng->Uniform(CRange<Real>(min_distance, max_distance)) * cos(c_random_angle));
+        
+        //check if there is some kilobot on top of the target
+        kilobot_on_the_top = 
+        std::find_if(m_vecKilobotsPositions.begin(), m_vecKilobotsPositions.end(), [&c_position, &c_radius](CVector2 const &position) {
+            return Distance(c_position, position) < (c_radius + kEpsilon) ;
+            });
+        
+    }while(kilobot_on_the_top != m_vecKilobotsPositions.end());
+
+    /***** target positioning ********************************************************************************************************************************************/
 }
 
 /****************************************/
@@ -97,7 +123,7 @@ void LMCRW::SetupInitialKilobotStates() {
 
 void LMCRW::SetupInitialKilobotState(CKilobotEntity &c_kilobot_entity){
     /* The kilobots begins outside the clustering hub*/
-    UInt16 unKilobotID=GetKilobotId(c_kilobot_entity);
+    UInt8 unKilobotID=GetKilobotId(c_kilobot_entity);
     m_vecKilobotStates[unKilobotID] = NOT_TARGET_FOUND;
     m_vecLastTimeMessaged[unKilobotID] = -1000;
 
@@ -115,7 +141,14 @@ void LMCRW::SetupInitialKilobotState(CKilobotEntity &c_kilobot_entity){
     CQuaternion random_rotation;
     CRadians rand_rot_angle(c_rng->Uniform(CRange<Real>(-CRadians::PI.GetValue(), CRadians::PI.GetValue())));
     random_rotation.FromEulerAngles(rand_rot_angle, CRadians::ZERO, CRadians::ZERO);
-    Real radius =  m_ArenaStructure.Radius - m_ArenaStructure.Wall_width/2 - kKiloDiameter/2 - kEpsilon;
+
+    Real radius = 0.0;
+
+    if (exp_type != "open_space")
+        radius =  m_ArenaStructure.Radius - m_ArenaStructure.Wall_width/2 - kKiloDiameter/2 - kEpsilon;
+    else
+        radius =  kDistanceKilobotsFromTheOrigin;
+        
 
     do {
         rand_x = c_rng->Uniform(CRange<Real>(-radius,radius));
@@ -129,6 +162,8 @@ void LMCRW::SetupInitialKilobotState(CKilobotEntity &c_kilobot_entity){
 
     m_vecKilobotsPositions[unKilobotID] = GetKilobotPosition(c_kilobot_entity);
     m_vecKilobotsOrientations[unKilobotID] = GetKilobotOrientation(c_kilobot_entity);
+
+
     
 
 }
@@ -141,80 +176,51 @@ void LMCRW::SetupVirtualEnvironments(TConfigurationNode& t_tree){
     CSimulator &simulator = GetSimulator();
     m_random_seed = simulator.GetRandomSeed();
 
-    /* Read arena parameters */
-    vArena_size = argos::CSimulator::GetInstance().GetSpace().GetArenaSize().GetX();
-    vDistance_threshold = vArena_size / 2.0 - 2.0 * kKiloDiameter;
-    std::cout << "Arena size: " << vArena_size << "\n";
-
     /* Get the virtual environments node from .argos file*/
     TConfigurationNode& tVirtualEnvironmentsNode = GetNode(t_tree,"environments");
-    /* Get the node defining the walls parametres*/
-    TConfigurationNode& t_VirtualWallsNode = GetNode(tVirtualEnvironmentsNode,"Perimeter");
-    GetNodeAttribute(t_VirtualWallsNode, "radius", m_ArenaStructure.Radius);
-    GetNodeAttribute(t_VirtualWallsNode, "width", m_ArenaStructure.Wall_width);
-    GetNodeAttribute(t_VirtualWallsNode, "height", m_ArenaStructure.Wall_height);
-    GetNodeAttribute(t_VirtualWallsNode, "walls", m_ArenaStructure.Wall_numbers);
 
-    
+    /***** wall positioning ********************************************************************************************************************************************/
+    if(exp_type != "open_space"){
+        /* Get the node defining the walls parametres*/
+        TConfigurationNode& t_VirtualWallsNode = GetNode(tVirtualEnvironmentsNode,"Perimeter");
+        GetNodeAttribute(t_VirtualWallsNode, "radius", m_ArenaStructure.Radius);
+        GetNodeAttribute(t_VirtualWallsNode, "width", m_ArenaStructure.Wall_width);
+        GetNodeAttribute(t_VirtualWallsNode, "height", m_ArenaStructure.Wall_height);
+        GetNodeAttribute(t_VirtualWallsNode, "walls", m_ArenaStructure.Wall_numbers);
 
-    std::ostringstream entity_id;
-    CRadians wall_angle = CRadians::TWO_PI / m_ArenaStructure.Wall_numbers;
-    CVector3 wall_size(m_ArenaStructure.Wall_width, 2.0 * m_ArenaStructure.Radius * Tan(CRadians::PI / m_ArenaStructure.Wall_numbers), m_ArenaStructure.Wall_height);
+        /* Read arena parameters */
+        vArena_size = m_ArenaStructure.Radius - m_ArenaStructure.Wall_width/2.0;
+        vDistance_threshold = vArena_size - 2.0 * kKiloDiameter;
+        std::cout << "Arena radius: " << vArena_size << "\n";
 
-    /* wall positioning */
-    for (UInt32 i = 0; i < m_ArenaStructure.Wall_numbers; i++) {
-        entity_id.str("");
-        entity_id << "wall_" << i;
+        std::ostringstream entity_id;
+        CRadians wall_angle = CRadians::TWO_PI / m_ArenaStructure.Wall_numbers;
+        CVector3 wall_size(m_ArenaStructure.Wall_width, 2.0 * m_ArenaStructure.Radius * Tan(CRadians::PI / m_ArenaStructure.Wall_numbers), m_ArenaStructure.Wall_height);
 
-        CRadians wall_rotation = wall_angle * i;
-        CVector3 wall_position(m_ArenaStructure.Radius * Cos(wall_rotation), m_ArenaStructure.Radius * Sin(wall_rotation), 0);
-        CQuaternion wall_orientation;
-        wall_orientation.FromEulerAngles(wall_rotation, CRadians::ZERO, CRadians::ZERO);
+        for (UInt32 i = 0; i < m_ArenaStructure.Wall_numbers; i++) {
+            entity_id.str("");
+            entity_id << "wall_" << i;
 
-        CBoxEntity *wall = new CBoxEntity(entity_id.str(), wall_position, wall_orientation, false, wall_size);
-        AddEntity(*wall);
+            CRadians wall_rotation = wall_angle * i;
+            CVector3 wall_position(m_ArenaStructure.Radius * Cos(wall_rotation), m_ArenaStructure.Radius * Sin(wall_rotation), 0);
+            CQuaternion wall_orientation;
+            wall_orientation.FromEulerAngles(wall_rotation, CRadians::ZERO, CRadians::ZERO);
+
+            CBoxEntity *wall = new CBoxEntity(entity_id.str(), wall_position, wall_orientation, false, wall_size);
+            AddEntity(*wall);
+        }
     }
+    /***** wall positioning ********************************************************************************************************************************************/
 
 
+    /***** target info ********************************************************************************************************************************************/
     /* Get the node defining the clustering hub parameters */
-    TConfigurationNode& t_VirtualClusteringHubNode = GetNode(tVirtualEnvironmentsNode,"Area");
-    GetNodeAttribute(t_VirtualClusteringHubNode, "position", m_sClusteringHub.Center);
-    GetNodeAttribute(t_VirtualClusteringHubNode, "radius", m_sClusteringHub.Radius);
-    GetNodeAttribute(t_VirtualClusteringHubNode, "color", m_sClusteringHub.Color);
-    
-
-
-    //The experiment must start with no kilobot on top of the target
-    //In the following there is the collision check between target and each kilobot
-    Real c_random_angle;
-    CVector2 & c_position = m_sClusteringHub.Center;
-    Real & c_radius = m_sClusteringHub.Radius;
-    std::vector<CVector2>::iterator kilobot_on_the_top;
-    
-    if (m_ArenaStructure.Wall_numbers != 0)
-    {
-        do{
-            c_random_angle = c_rng->Uniform(CRange<Real>(-CRadians::PI.GetValue(), CRadians::PI.GetValue()));
-            c_position.SetX(c_rng->Uniform(CRange<Real>(0, m_ArenaStructure.Radius - m_ArenaStructure.Wall_width - c_radius - kKiloDiameter)) * sin(c_random_angle));
-            c_position.SetY(c_rng->Uniform(CRange<Real>(0, m_ArenaStructure.Radius - m_ArenaStructure.Wall_width - c_radius - kKiloDiameter)) * cos(c_random_angle));
-            
-            //check if there is some kilobot on top of the target
-            kilobot_on_the_top = 
-            std::find_if(m_vecKilobotsPositions.begin(), m_vecKilobotsPositions.end(), [&c_position, &c_radius](CVector2 const &position) {
-                return Distance(c_position, position) < (c_radius + kEpsilon) ;
-                });
-            
-        }while(kilobot_on_the_top != m_vecKilobotsPositions.end());
-    }
-
-    else
-    {
-        //Target positioned at kDistanceTargetFromTheOrigin cm from the origin
-        c_random_angle = c_rng->Uniform(CRange<Real>(-CRadians::PI.GetValue(), CRadians::PI.GetValue()));
-        c_position.SetX(kDistanceTargetFromTheOrigin * sin(c_random_angle));
-        c_position.SetY(kDistanceTargetFromTheOrigin * cos(c_random_angle));
-        // std::cout<<"Distance from the origin : "<< pow(c_position.GetX(),2) + pow(c_position.GetY(),2) << std::endl;
-    }
+    TConfigurationNode& t_VirtualClusteringHubNode = GetNode(tVirtualEnvironmentsNode,"Target");
+    GetNodeAttribute(t_VirtualClusteringHubNode, "position", Target.Center);
+    GetNodeAttribute(t_VirtualClusteringHubNode, "radius", Target.Radius);
+    GetNodeAttribute(t_VirtualClusteringHubNode, "originDistance", Target.OriginDistance);
+    GetNodeAttribute(t_VirtualClusteringHubNode, "color", Target.Color);
+    /***** target info ********************************************************************************************************************************************/
 }
 
 /****************************************/
@@ -226,8 +232,10 @@ void LMCRW::GetExperimentVariables(TConfigurationNode& t_tree){
     /* Get the crwlevy exponents */
     GetNodeAttribute(tExperimentVariablesNode, "crw", crw_exponent);
     GetNodeAttribute(tExperimentVariablesNode, "levy", levy_exponent);
-    /* Get the crwlevy exponents */
+    /* Get the experimente type (open or close space) */
     GetNodeAttributeOrDefault(tExperimentVariablesNode, "experiment", exp_type, exp_type);
+    /* Get the range in which robots should be positioned */
+    GetNodeAttributeOrDefault(tExperimentVariablesNode, "kDistanceKilobotsFromTheOrigin", kDistanceKilobotsFromTheOrigin, 0.0);
     /* Get the positions datafile name to store Kilobot positions in time */
     GetNodeAttribute(tExperimentVariablesNode, "positionsfilename", m_kiloOutputFileName);
     /* Get the output datafile name and open it */
@@ -246,14 +254,14 @@ void LMCRW::GetExperimentVariables(TConfigurationNode& t_tree){
 
 void LMCRW::UpdateKilobotState(CKilobotEntity &c_kilobot_entity){
     /* Update the state of the kilobots (target not found, found directly or communicated)*/
-    UInt16 unKilobotID=GetKilobotId(c_kilobot_entity);
+    UInt8 unKilobotID=GetKilobotId(c_kilobot_entity);
 
 
     m_vecKilobotsPositions[unKilobotID] = GetKilobotPosition(c_kilobot_entity);
     m_vecKilobotsOrientations[unKilobotID] = GetKilobotOrientation(c_kilobot_entity);
 
-    Real fDistance = Distance(m_vecKilobotsPositions[unKilobotID], m_sClusteringHub.Center);
-    m_vecKilobotStates[unKilobotID] = fDistance<(m_sClusteringHub.Radius) ? TARGET_FOUND : m_vecKilobotStates[unKilobotID];
+    Real fDistance = Distance(m_vecKilobotsPositions[unKilobotID], Target.Center);
+    m_vecKilobotStates[unKilobotID] = fDistance<(Target.Radius) ? TARGET_FOUND : m_vecKilobotStates[unKilobotID];
 
     switch (m_vecKilobotStates[unKilobotID])
     {
@@ -332,36 +340,43 @@ void LMCRW::UpdateVirtualSensor(CKilobotEntity &c_kilobot_entity){
     /*Create ARK-type messages variables*/
     m_tALFKilobotMessage tKilobotMessage,tEmptyMessage,tMessage;
     /* Get the kilobot ID and state (Only Position in this example) */
-    UInt16 unKilobotID=GetKilobotId(c_kilobot_entity);
+    UInt8 unKilobotID=GetKilobotId(c_kilobot_entity);
     
     // Prepare an empty ARK-type message to fill the gap in the full kilobot message
-    tEmptyMessage.m_sID=511;
+    tEmptyMessage.m_sID=1023;
     tEmptyMessage.m_sType=0;
     tEmptyMessage.m_sData=0;
 
     tKilobotMessage = tEmptyMessage;
-    m_tMessages[unKilobotID].type = 0;
-    
 
-    if (m_fTimeInSeconds - m_vecLastTimeMessaged[unKilobotID] < m_fMinTimeBetweenTwoMsg)
-    {
-        return;
-    }
+
+    // if (m_fTimeInSeconds - m_vecLastTimeMessaged[unKilobotID] < m_fMinTimeBetweenTwoMsg)
+    // {
+    //     return;
+    // }
+
+    // TODO: check the following line
+    m_tMessages[unKilobotID].type = 0;
 
     /* if the experiment is not started yet, send alpha and rho parameters */
     if(!experiment_started)
     {
+        m_tMessages[unKilobotID].type = 2;
+
         // Messages of parameters (crw, levy)
         UInt8 crw = (UInt8)(crw_exponent*10);
-        UInt8 levy = (UInt8)(levy_exponent*10);
-        
-        m_tMessages[unKilobotID].type = 255;
+        UInt8 levy = (UInt8)(levy_exponent*10);        
 
         tKilobotMessage.m_sID = unKilobotID;
         tKilobotMessage.m_sData = (crw << 5);
         tKilobotMessage.m_sData = tKilobotMessage.m_sData | levy;
+        if(exp_type == "open_space")
+            tKilobotMessage.m_sType =  2;
+        else
+            tKilobotMessage.m_sType =  3;
 
         // std::cout<< "rho: " << crw << "alpha: " << levy << std::endl;
+        std::cout<< "kID: " << unKilobotID << " exp_type: " << exp_type << "m_sType: " << tKilobotMessage.m_sType << std::endl;
     }
     
 
@@ -381,11 +396,11 @@ void LMCRW::UpdateVirtualSensor(CKilobotEntity &c_kilobot_entity){
 
     /********* WALL AVOIDANCE PROCEDURE *************/
     UInt8 proximity_sensor_dec = 0; //8 bit proximity sensor as decimal
-    Real fDistance = Distance(m_vecKilobotsPositions[unKilobotID], m_ArenaStructure.Center);
+    Real fDistance = Distance(m_vecKilobotsPositions[unKilobotID], CVector2(0,0));
     // std::cerr<<"fDistance: "<<fDistance<<std::endl;
     // std::cerr<<"vDistance_threshold: "<<vDistance_threshold<<std::endl;
 
-    if (fDistance > vDistance_threshold && exp_type!="simple_experiment")
+    if (fDistance > vDistance_threshold && exp_type!="simple_experiment" && exp_type != "open_space")
     {
         /************************************************************************************************************************/
         /** Bouncing ANGLE*/
@@ -420,11 +435,11 @@ void LMCRW::UpdateVirtualSensor(CKilobotEntity &c_kilobot_entity){
         else if (exp_type == "random_angle") {
             CRadians home_angle = ATan2(-m_vecKilobotsPositions[unKilobotID].GetY(), -m_vecKilobotsPositions[unKilobotID].GetX()) - m_vecKilobotsOrientations[unKilobotID];
             // std::cout << "random_angle: " << random_angle.RADIANS_TO_DEGREES << '\t';
-            random_angle = CRadians(c_rng->Uniform(CRange<Real>(-CRadians::PI_OVER_TWO.GetValue(), CRadians::PI_OVER_TWO.GetValue())));
+            CRadians random_angle = CRadians(c_rng->Uniform(CRange<Real>(-CRadians::PI_OVER_TWO.GetValue(), CRadians::PI_OVER_TWO.GetValue())));
             random_angle += home_angle;
             random_angle.SignedNormalize(); //map angle in [-pi,pi]
 
-            if(home_angle.SignedNormalize().GetAbsoluteValue() > M_PI_2)
+            if(home_angle.SignedNormalize().GetAbsoluteValue() > M_PI_2) // check for collision considering robot direction
             {
                 tKilobotMessage.m_sID = unKilobotID;
                 tKilobotMessage.m_sType = RANDOM_ANGLE_MESSAGE;
@@ -436,7 +451,6 @@ void LMCRW::UpdateVirtualSensor(CKilobotEntity &c_kilobot_entity){
                     tKilobotMessage.m_sData = (UInt8) round ((127.0 / M_PI) * random_angle.GetAbsoluteValue());
                     tKilobotMessage.m_sData = tKilobotMessage.m_sData | 1 << 7;
                 }
-                std::bitset<8> b1 (tKilobotMessage.m_sData);
             }
         }
         /************************************************************************************************************************/
@@ -444,6 +458,23 @@ void LMCRW::UpdateVirtualSensor(CKilobotEntity &c_kilobot_entity){
         else{
             std::cout<<"****WARNING!!***\n" << exp_type << " is a NOT EXISTING experiment!!!\n";
         }
+    }
+
+    if (GetKilobotLedColor(c_kilobot_entity) == CColor::BLUE && exp_type == "open_space") {
+        // std::cout<< "Open space experiment\n";
+        CRadians home_angle = ATan2(-m_vecKilobotsPositions[unKilobotID].GetY(), -m_vecKilobotsPositions[unKilobotID].GetX()) - m_vecKilobotsOrientations[unKilobotID];
+        home_angle.SignedNormalize(); //map angle in [-pi,pi]
+        tKilobotMessage.m_sID = unKilobotID;
+        tKilobotMessage.m_sType = BIAS_MESSAGE;
+
+        if(home_angle.GetValue() >= 0)
+            tKilobotMessage.m_sData = (UInt8) round ((127.0 / M_PI) * home_angle.GetValue());
+        else
+        {
+            tKilobotMessage.m_sData = (UInt8) round ((127.0 / M_PI) * home_angle.GetAbsoluteValue());
+            tKilobotMessage.m_sData = tKilobotMessage.m_sData | 1 << 7;
+        }
+
     }
 
     /** 
@@ -502,7 +533,7 @@ void LMCRW::PostStep()
 
 void LMCRW::PostExperiment()
 {
-    std::cout << "END\n";
+    std::cout << "END "<< m_fTimeInSeconds <<"\n";
 }
 
 
@@ -542,7 +573,7 @@ void LMCRW::KiloLOG()
 
 void LMCRW::PrintKilobotState(CKilobotEntity& c_kilobot_entity)
 {
-    UInt16 unKilobotID=GetKilobotId(c_kilobot_entity);
+    UInt8 unKilobotID=GetKilobotId(c_kilobot_entity);
 
     std::cerr<<"Actual state:";
     switch (m_vecKilobotStates[unKilobotID])
@@ -583,15 +614,21 @@ void LMCRW::PrintVecPos(std::vector<CVector2> vecKilobotsPositions)
 CColor LMCRW::GetFloorColor(const CVector2 &vec_position_on_plane) {
     CColor cColor=CColor::WHITE;
 
-    if (SquareDistance(vec_position_on_plane, m_sClusteringHub.Center) < pow(m_sClusteringHub.Radius, 2))
+    if (SquareDistance(vec_position_on_plane, Target.Center) < pow(Target.Radius, 2))
     {
-        cColor = m_sClusteringHub.Color;
+        cColor = Target.Color;
     }
+
+    // /* Some circles */
+    // Real center_distance = Distance(vec_position_on_plane, CVector2(0,0));
+    // if (center_distance < 0.4 + 0.01 && center_distance > 0.4 - 0.01){
+    //     cColor = CColor(125, 0, 0, 0);
+    // }
 
     // /** origin to kID 0 line */
     // CVector2 kiloPos = m_vecKilobotsPositions[0];
-    // if(vec_position_on_plane.GetY() - (kiloPos.GetY()/kiloPos.GetX()) * vec_position_on_plane.GetX() < 0.01 &&
-    //     vec_position_on_plane.GetY() - (kiloPos.GetY()/kiloPos.GetX()) * vec_position_on_plane.GetX() > -0.01){
+    // if(vec_position_on_plane.GetY() - (kiloPos.GetY()/kiloPos.GetX()) * vec_position_on_plane.GetX() < 0.02 &&
+    //     vec_position_on_plane.GetY() - (kiloPos.GetY()/kiloPos.GetX()) * vec_position_on_plane.GetX() > -0.02){
     //     cColor = CColor::BLUE;
     // }
 

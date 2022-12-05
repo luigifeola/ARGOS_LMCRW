@@ -31,6 +31,7 @@ typedef enum {
   STOP = 3,
   RANDOM_ROTATION = 4,
   BOUNCING_ANGLE = 5,
+  POINTING_HOME = 6,
 } motion_t;
 
 /* Enum for boolean flags */
@@ -42,7 +43,7 @@ typedef enum {
 typedef enum {
   ARK_MSG = 0,
   KILOBOTS_MSG = 1,
-  CONFIG_PARAMETERS_MSG = 255,
+  CONFIG_PARAMETERS_MSG = 2,
   IDLE = 111
 } received_message_type;
 
@@ -59,6 +60,7 @@ typedef enum {
     OUTSIDE_TARGET = 0,
     DISCOVERED_TARGET = 1,
     COMMUNICATED_TARGET = 2,
+    WAITING_BIAS = 3,
 } state_t;
 
 /* Remember last free side when wall avoidance happened */
@@ -73,13 +75,14 @@ motion_t current_motion_type = STOP;
 
 /* current state */
 state_t current_state = OUTSIDE_TARGET;
+state_t current_state_backup = OUTSIDE_TARGET;
 
 /* Message send to the other kilobots */
 message_t messageA;
 
 /* Variables for Smart Arena messages */
-int sa_type = 3;    //dummy value, state_t in [0,2]
-int sa_payload = 0;
+uint8_t sa_type = 0; 
+uint8_t sa_payload;
 bool new_sa_msg = false;
 
 /* rotation command */
@@ -101,6 +104,8 @@ uint16_t straight_ticks = 0; // keep count of ticks of going straight
 /*Parameters from ARK*/
 double levy_exponent = -1; 
 double crw_exponent = -1; 
+bool openSpace_exp = false;
+bool received_coefficients = false;
 
 
 
@@ -136,23 +141,35 @@ void my_printf(const char *fmt, ...)
 /*-------------------------------------------------------------------*/
 void print_state()
 {
-  printf("State: ");
+  printf("%d State: ", kilo_uid);
   switch (current_state)
   {
     case OUTSIDE_TARGET:
-      printf("NOT_TARGET_FOUND\t");
+      printf("NOT_TARGET_FOUND\n");
       break;
     case DISCOVERED_TARGET:
-      printf("TARGET_FOUND\t");
+      printf("TARGET_FOUND\n");
       break;
     case COMMUNICATED_TARGET:
-      printf("TARGET_COMMUNICATED\t");
+      printf("TARGET_COMMUNICATED\n");
+      break;
+    case WAITING_BIAS:
+      printf("WAITING_BIAS\n");
       break;
       
     default:
       printf("Error, no one of the possible state happens\n");
         break;
   }
+}
+
+/*-------------------------------------------------------------------*/
+/* Update state only if robot is not waiting a rotation angle        */
+/*-------------------------------------------------------------------*/
+void update_state(new_state)
+{
+  if(current_state!=WAITING_BIAS)
+    current_state = new_state;
 }
 
 /*-------------------------------------------------------------------*/
@@ -170,6 +187,9 @@ void check_state()
       break;
     case COMMUNICATED_TARGET:
       set_color(RGB(0,3,0));
+      break;
+    case WAITING_BIAS:
+      set_color(RGB(0,0,3));
       break;
       
     default:
@@ -334,39 +354,45 @@ void message_rx(message_t *msg, distance_measurement_t *d) {
     int id2 = msg->data[3] << 2 | (msg->data[4] >> 6);
     int id3 = msg->data[6] << 2 | (msg->data[7] >> 6);
     if (id1 == kilo_uid) {
-        // unpack type
-        sa_type = msg->data[1] >> 2 & 0x0F;
-        // unpack payload
-        sa_payload = ((msg->data[1]&0b11) << 8) | (msg->data[2]);
-        levy_exponent = (double) (sa_payload & 0x1F) /10;
-        crw_exponent = (double) ((sa_payload >> 5) & 0x1F) /10;
-
-        // printf("kilo_uid %d, crw_exponent %f, levy_exponent %f\n",kilo_uid, crw_exponent, levy_exponent);
-
-
+      // unpack type
+      sa_type = msg->data[1] >> 2 & 0x0F;
+      // unpack payload
+      sa_payload = ((msg->data[1]&0b11) << 8) | (msg->data[2]);
+      levy_exponent = (double) (sa_payload & 0x1F) / 10.0;
+      crw_exponent = (double) ((sa_payload >> 5) & 0x1F) / 10.0;
+      if(sa_type == 3){
+        openSpace_exp = true;
+      }
+      printf("kilo_uid %d, sa_type %d, crw_exponent %f, levy_exponent %f\n",kilo_uid, sa_type, crw_exponent, levy_exponent);
+      // printf("kilo_uid %d, crw_exponent %f, levy_exponent %f\n",kilo_uid, crw_exponent, levy_exponent);
     }
     
     if (id2 == kilo_uid) {
-        // unpack type
-        sa_type = msg->data[4] >> 2 & 0x0F;
-        // unpack payload
-        sa_payload = ((msg->data[4]&0b11)  << 8) | (msg->data[5]);
-        levy_exponent = (double) (sa_payload & 0x1F) /10;
-        crw_exponent = (double) ((sa_payload >> 5) & 0x1F) /10;
-        
-        // printf("kilo_uid %d, crw_exponent %f, levy_exponent %f\n",kilo_uid, crw_exponent, levy_exponent);
-
-
+      // unpack type
+      sa_type = msg->data[4] >> 2 & 0x0F;
+      // unpack payload
+      sa_payload = ((msg->data[4]&0b11)  << 8) | (msg->data[5]);
+      levy_exponent = (double) (sa_payload & 0x1F) /10;
+      crw_exponent = (double) ((sa_payload >> 5) & 0x1F) /10;
+      if(sa_type == 3){
+        openSpace_exp = true;
+      }
+      printf("kilo_uid %d, sa_type %d, crw_exponent %f, levy_exponent %f\n",kilo_uid, sa_type, crw_exponent, levy_exponent);
+      // printf("kilo_uid %d, crw_exponent %f, levy_exponent %f\n",kilo_uid, crw_exponent, levy_exponent);
     }
-    if (id3 == kilo_uid) {
-        // unpack type
-        sa_type = msg->data[7] >> 2 & 0x0F;
-        // unpack payload
-        sa_payload = ((msg->data[7]&0b11)  << 8) | (msg->data[8]);
-        levy_exponent = (double) (sa_payload & 0x1F) /10;
-        crw_exponent = (double) ((sa_payload >> 5) & 0x1F) /10;
 
-        // printf("kilo_uid %d, crw_exponent %f, levy_exponent %f\n",kilo_uid, crw_exponent, levy_exponent);
+    if (id3 == kilo_uid) {
+      // unpack type
+      sa_type = msg->data[7] >> 2 & 0x0F;
+      // unpack payload
+      sa_payload = ((msg->data[7]&0b11)  << 8) | (msg->data[8]);
+      levy_exponent = (double) (sa_payload & 0x1F) /10;
+      crw_exponent = (double) ((sa_payload >> 5) & 0x1F) /10;
+      if(sa_type == 3){
+        openSpace_exp = true;
+      }
+      printf("kilo_uid %d, sa_type %d, crw_exponent %f, levy_exponent %f\n",kilo_uid, sa_type, crw_exponent, levy_exponent);
+      // printf("kilo_uid %d, crw_exponent %f, levy_exponent %f\n",kilo_uid, crw_exponent, levy_exponent);
 
     }
     break;
@@ -401,7 +427,7 @@ void message_rx(message_t *msg, distance_measurement_t *d) {
 
     if(new_sa_msg==true) {
       if(sa_type==STATE_MESSAGE){
-        current_state=DISCOVERED_TARGET;
+        update_state(DISCOVERED_TARGET);
         new_information = true;
         set_color(RGB(3, 0, 0));
       }
@@ -430,8 +456,21 @@ void message_rx(message_t *msg, distance_measurement_t *d) {
         current_motion_type = RANDOM_ROTATION;
       }
 
+      else if(sa_type==BIAS_MESSAGE && rotation_amount == 0.0){
+        rotation_amount = (sa_payload & 0x7F) * M_PI / 127.0;
+        if (((sa_payload >> 7) & 0x01) == 0){
+          rotation_direction = LEFT;
+        }
+        else{
+          rotation_direction = RIGHT;
+        }
+
+        current_motion_type = POINTING_HOME;
+      }
+
       new_sa_msg = false;
     }
+
     break;
   }
 
@@ -447,13 +486,12 @@ void message_rx(message_t *msg, distance_measurement_t *d) {
     /* ----------------------------------*/
     /* KB interactive message            */
     /* ----------------------------------*/
-    // if new_information == true means that the kb has yet the info about the target, so the following msg not needed
-    else if (msg->data[0]!=kilo_uid && msg->crc==message_crc(msg) && new_information == false) 
+    else if (msg->data[0]!=kilo_uid && msg->crc==message_crc(msg)) 
     {
       new_information = true;
       if (current_state != DISCOVERED_TARGET)
       {
-        current_state = COMMUNICATED_TARGET;
+        update_state(COMMUNICATED_TARGET);
         set_color(RGB(0, 3, 0));
       }
     }
@@ -499,6 +537,7 @@ void random_walk()
 
         if(rotation_amount != 0.0) {
           rotation_amount = 0.0;
+          current_state = current_state_backup;
           straight_ticks = (uint32_t)(fabs(levy(std_motion_steps, levy_exponent)));
         }
 
@@ -529,21 +568,31 @@ void random_walk()
         else{
           set_motion(TURN_RIGHT);
         }
+
+        /* rand_soft() returns a random number in [0,254]
+           so if you want evaluate the 20% (100/5) --> ~= 51 (254/5)
+        */
+        if(rand_soft() < 255/5 && openSpace_exp){
+          current_state_backup = current_state;
+          update_state(WAITING_BIAS);
+          set_color(RGB(0,0,3));
+          set_motion(STOP);
+          // printf("Waiting for the angle\n");
+        }
+
         double angle = 0;
         if(crw_exponent == 0) {
           angle = (uniform_distribution(0, (M_PI)));
-          // my_printf("%" PRIu32 "\n", turning_ticks);
-          // my_printf("%u" "\n", rand());
         }
         else{
           angle = fabs(wrapped_cauchy_ppf(crw_exponent));
         }
         turning_ticks = (uint32_t)((angle / M_PI) * max_turning_ticks);
         straight_ticks = (uint32_t)(fabs(levy(std_motion_steps, levy_exponent)));
-        // my_printf("%u" "\n", straight_ticks);
       }
       break;
 
+    case POINTING_HOME:
     case RANDOM_ROTATION:
       set_motion(rotation_direction);
       current_motion_type = rotation_direction;
@@ -561,7 +610,7 @@ void random_walk()
 
     case STOP:
     default:
-      set_motion(FORWARD);
+      set_motion(STOP);
   }
 }
 
@@ -572,9 +621,14 @@ void loop()
 {  
   //turn on the right led color
   check_state();
+  // print_state();
 
   if(crw_exponent!=-1 && levy_exponent!=-1)
   {
+    if(received_coefficients == false){
+      set_motion(FORWARD);
+      received_coefficients = true;
+    }
     random_walk();
     broadcast();  
   }
