@@ -2,10 +2,10 @@
 
 ### How it works for me ###
 # in ARGoS folder run the following:
-# ./src/examples/experiments/batch/bouncing_angle.sh /src/examples/experiments/batch closed_space.argos
+# ./src/examples/experiments/batch/random_angle.sh /src/examples/experiments/batch closed_space.argos
 
 if [ "$#" -ne 2 ]; then
-    echo "Usage: bouncing_angle.sh (from src folder) <base_config_dir> <base_config_file_name>"
+    echo "Usage: random_angle.sh (from src folder) <base_config_dir> <base_config_file_name>"
     exit 11
 fi
 
@@ -20,7 +20,7 @@ if [ ! -e $base_config ]; then
     fi
 fi
 
-res_dir=$wdir/"results/bouncing_angle"
+res_dir=$wdir/"results/random_angle"
 if [[ ! -e $res_dir ]]; then
     mkdir $res_dir
     echo "mkdir: directory '$res_dir' "
@@ -39,7 +39,7 @@ echo "$CONFIGURATION_FILE" | egrep "^$SHARED_DIR" &> /dev/null || exit 1
 #################################
 experiment_length="180"
 date_time=`date "+%Y-%m-%d"`
-experiment_type="bouncing"
+experiment_type="random_angle"
 
 # TEST
 # RUNS=1

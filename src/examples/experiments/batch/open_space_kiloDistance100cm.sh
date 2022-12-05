@@ -1,11 +1,14 @@
 #!/bin/bash
 
+### How it works for me ###
+# in ARGoS folder run the following:
+# ./src/examples/experiments/batch/open_space_target100cm.sh /src/examples/experiments/batch closed_space.argos
+
 if [ "$#" -ne 2 ]; then
-    echo "Usage: bias_experiment.sh (from src folder) <base_config_dir> <base_config_file_name>"
+    echo "Usage: open_space_target100cm.sh (from src folder) <base_config_dir> <base_config_file_name>"
     exit 11
 fi
 
-RUNS=100
 
 wdir=`pwd`
 base_config=$1$2
@@ -17,9 +20,10 @@ if [ ! -e $base_config ]; then
     fi
 fi
 
-res_dir=$wdir/"results/new_alpha/bias_experiment_"$RUNS"_runs_100_robs" 
+res_dir=$wdir/"results/open_space_target100cm"
 if [[ ! -e $res_dir ]]; then
     mkdir $res_dir
+    echo "mkdir: directory '$res_dir' "
 else
     echo "Error: directory '$res_dir' already exists" 
     exit 1
@@ -29,23 +33,31 @@ base_dir=`dirname $base_config`
 echo base_dir $base_dir
 echo "$CONFIGURATION_FILE" | egrep "^$SHARED_DIR" &> /dev/null || exit 1
 
-numrobots="10 20 50"
 
-# 1 for SIMPLE_EXPERIMENT
-# 2 for OBSTACLE_AVOIDANCE_EXPERIMENT
-experiment_type="2"
-levy="1.4 1.8"
-crw="0.0 0.3 0.6 0.9"
-bias_prob="0.1"
-numWalls="0"
-arenaSize="50, 50, 4"
-# arenaSize="10, 10, 4"
-radius="0.25"
 #################################
 # experiment_length is in seconds
 #################################
 experiment_length="1800"
 date_time=`date "+%Y-%m-%d"`
+experiment_type="open_space"
+target_distance="0.5"
+kilobot_distance="1.0"
+
+# TEST
+# experiment_length="180"
+# RUNS=1
+# numrobots="10"
+# levy="1.2 1.4"
+# crw="0.0 0.3"
+# arenaSize="5, 5, 4"
+
+# FINAL
+RUNS=100
+numrobots="10 20 50 100"
+levy="1.2 1.4 1.6 1.8 2.0"
+crw="0.0 0.3 0.6 0.9"
+arenaSize="40, 40, 4"
+
 
 for nrob in $numrobots; do
     for par1 in $levy; do
@@ -60,27 +72,27 @@ for nrob in $numrobots; do
                 config=`printf 'config_nrob%d_levy%02d_crw%03d_seed%03d.argos' $nrob $par1 $par2 $it`
                 echo config $config
                 cp $base_config $config
-                sed -i "s|__NUMROBOTS__|$nrob|g" $config
-                sed -i "s|__BIASPROB__|$bias_prob|g" $config
-                sed -i "s|__RADIUS__|$radius|g" $config
-                sed -i "s|__EXPERIMENT__|$experiment_type|g" $config
-                sed -i "s|__NUMWALLS__|$numWalls|g" $config
-                sed -i "s|__ARENASIZE__|$arenaSize|g" $config
                 sed -i "s|__TIMEEXPERIMENT__|$experiment_length|g" $config
                 sed -i "s|__SEED__|$it|g" $config
                 sed -i "s|__CRW__|$par2|g" $config
                 sed -i "s|__LEVY__|$par1|g" $config
-                output_file="seed#${it}_time_results.tsv"
-                sed -i "s|__OUTPUT__|$output_file|g" $config
+                sed -i "s|__EXPERIMENT__|$experiment_type|g" $config
+                sed -i "s|__TARGETDISTANCE__|$target_distance|g" $config
+                sed -i "s|__KILODISTANCE__|$kilobot_distance|g" $config
+                sed -i "s|__ARENASIZE__|$arenaSize|g" $config
+                sed -i "s|__NUMROBOTS__|$nrob|g" $config
+                
+                timeStats_file="seed#${it}_timeStats.txt"
+                sed -i "s|__TIMESTATS__|$timeStats_file|g" $config
 
-                positions_file="seed#${it}_position.tsv"
-                sed -i "s|__POSOUTPUT__|$positions_file|g" $config
+                kilo_file="seed#${it}_kiloLOG.txt"
+                sed -i "s|__KILOLOG__|$kilo_file|g" $config
 
                 
                 echo "Running next configuration Robots $nrob LEVY $par1 CRW $par2"
                 echo "argos3 -c $1$config"
                 argos3 -c './'$config
-            mv $output_file $param_dir && mv $positions_file $param_dir
+            mv $timeStats_file $param_dir && mv $kilo_file $param_dir
             done
         done
     done

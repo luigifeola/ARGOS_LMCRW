@@ -43,7 +43,6 @@ typedef enum {
 typedef enum {
   ARK_MSG = 0,
   KILOBOTS_MSG = 1,
-  CONFIG_PARAMETERS_MSG = 2,
   IDLE = 111
 } received_message_type;
 
@@ -51,7 +50,7 @@ typedef enum {
   STATE_MESSAGE=0,
   PROXIMITY_MESSAGE=1,
   RANDOM_ANGLE_MESSAGE=2,
-  BIAS_MESSAGE=3,
+  PARAMETER_MESSAGE=3,
 } SA_TYPE;
 
 
@@ -82,7 +81,7 @@ message_t messageA;
 
 /* Variables for Smart Arena messages */
 uint8_t sa_type = 0; 
-uint8_t sa_payload;
+uint16_t sa_payload;
 bool new_sa_msg = false;
 
 /* rotation command */
@@ -164,12 +163,25 @@ void print_state()
 }
 
 /*-------------------------------------------------------------------*/
-/* Update state only if robot is not waiting a rotation angle        */
+/* Update state                                                      */
 /*-------------------------------------------------------------------*/
 void update_state(new_state)
 {
-  if(current_state!=WAITING_BIAS)
+  if(new_state!=WAITING_BIAS)
     current_state = new_state;
+  else{
+    current_state_backup = current_state;
+    current_state = new_state;
+  }
+}
+
+/*-------------------------------------------------------------------*/
+/* Recover state                                                     */
+/*-------------------------------------------------------------------*/
+void recover_state()
+{
+  if(current_state==WAITING_BIAS)
+    current_state = current_state_backup;
 }
 
 /*-------------------------------------------------------------------*/
@@ -333,70 +345,11 @@ void message_tx_success() {
 /* and a CRC (2 bytes).                                              */
 /*-------------------------------------------------------------------*/
 void message_rx(message_t *msg, distance_measurement_t *d) {
-  
-  /* For testing communication */
-  // if (msg->type == 253)
-  // {
-  //   /* Blinking behaviour */
-  //   set_color(RGB(0, 3, 0));
-  //   delay(50);
-  //   set_color(RGB(3, 0, 0));
-  //   delay(50);
-  // }
 
   // printf("Message type: %d\n",msg->type);
 
   switch (msg->type)
   {
-  case CONFIG_PARAMETERS_MSG:
-  {
-    int id1 = msg->data[0] << 2 | (msg->data[1] >> 6);
-    int id2 = msg->data[3] << 2 | (msg->data[4] >> 6);
-    int id3 = msg->data[6] << 2 | (msg->data[7] >> 6);
-    if (id1 == kilo_uid) {
-      // unpack type
-      sa_type = msg->data[1] >> 2 & 0x0F;
-      // unpack payload
-      sa_payload = ((msg->data[1]&0b11) << 8) | (msg->data[2]);
-      levy_exponent = (double) (sa_payload & 0x1F) / 10.0;
-      crw_exponent = (double) ((sa_payload >> 5) & 0x1F) / 10.0;
-      if(sa_type == 3){
-        openSpace_exp = true;
-      }
-      printf("kilo_uid %d, sa_type %d, crw_exponent %f, levy_exponent %f\n",kilo_uid, sa_type, crw_exponent, levy_exponent);
-      // printf("kilo_uid %d, crw_exponent %f, levy_exponent %f\n",kilo_uid, crw_exponent, levy_exponent);
-    }
-    
-    if (id2 == kilo_uid) {
-      // unpack type
-      sa_type = msg->data[4] >> 2 & 0x0F;
-      // unpack payload
-      sa_payload = ((msg->data[4]&0b11)  << 8) | (msg->data[5]);
-      levy_exponent = (double) (sa_payload & 0x1F) /10;
-      crw_exponent = (double) ((sa_payload >> 5) & 0x1F) /10;
-      if(sa_type == 3){
-        openSpace_exp = true;
-      }
-      printf("kilo_uid %d, sa_type %d, crw_exponent %f, levy_exponent %f\n",kilo_uid, sa_type, crw_exponent, levy_exponent);
-      // printf("kilo_uid %d, crw_exponent %f, levy_exponent %f\n",kilo_uid, crw_exponent, levy_exponent);
-    }
-
-    if (id3 == kilo_uid) {
-      // unpack type
-      sa_type = msg->data[7] >> 2 & 0x0F;
-      // unpack payload
-      sa_payload = ((msg->data[7]&0b11)  << 8) | (msg->data[8]);
-      levy_exponent = (double) (sa_payload & 0x1F) /10;
-      crw_exponent = (double) ((sa_payload >> 5) & 0x1F) /10;
-      if(sa_type == 3){
-        openSpace_exp = true;
-      }
-      printf("kilo_uid %d, sa_type %d, crw_exponent %f, levy_exponent %f\n",kilo_uid, sa_type, crw_exponent, levy_exponent);
-      // printf("kilo_uid %d, crw_exponent %f, levy_exponent %f\n",kilo_uid, crw_exponent, levy_exponent);
-
-    }
-    break;
-  }
 
   case ARK_MSG: {
     // unpack message
@@ -426,51 +379,64 @@ void message_rx(message_t *msg, distance_measurement_t *d) {
     }
 
     if(new_sa_msg==true) {
-      if(sa_type==STATE_MESSAGE){
-        update_state(DISCOVERED_TARGET);
-        new_information = true;
-        set_color(RGB(3, 0, 0));
-      }
 
-      else if(sa_type==PROXIMITY_MESSAGE && sa_payload!=0 && bouncing_ticks==0){
-        /*wall avoidance*/
-        proximity_sensor = sa_payload;
-        bouncing_ticks = wall_avoidance_procedure(proximity_sensor);
-        if (bouncing_ticks != 0){
-          current_motion_type = BOUNCING_ANGLE;
-          if (kilo_ticks < last_motion_ticks + straight_ticks) {
-            straight_ticks_backup = straight_ticks - (kilo_ticks - last_motion_ticks);
+      switch (sa_type)
+      {
+
+      case PARAMETER_MESSAGE:
+        levy_exponent = (double) (sa_payload & 0x1F) / 10;
+        crw_exponent = (double) ((sa_payload >> 5) & 0xF) / 10;
+        uint8_t flag = (sa_payload >> 9);
+        if(flag == 1){
+          openSpace_exp = true;
+        }
+        break;
+
+      case STATE_MESSAGE:
+        if (current_state == WAITING_BIAS)
+          current_state_backup = DISCOVERED_TARGET;
+        else
+          update_state(DISCOVERED_TARGET);
+
+        new_information = true;
+        break;
+
+      case PROXIMITY_MESSAGE:
+        if(sa_payload!=0 && bouncing_ticks==0)
+        {
+          /*wall avoidance*/
+          proximity_sensor = sa_payload;
+          bouncing_ticks = wall_avoidance_procedure(proximity_sensor);
+          if (bouncing_ticks != 0){
+            current_motion_type = BOUNCING_ANGLE;
+            if (kilo_ticks < last_motion_ticks + straight_ticks) {
+              straight_ticks_backup = straight_ticks - (kilo_ticks - last_motion_ticks);
+            }
           }
         }
-      }
+        break;
 
-      else if(sa_type==RANDOM_ANGLE_MESSAGE && rotation_amount == 0.0){
-        rotation_amount = (sa_payload & 0x7F) * M_PI / 127.0;
-        if (((sa_payload >> 7) & 0x01) == 0){
-          rotation_direction = LEFT;
-        }
-        else{
-          rotation_direction = RIGHT;
-        }
+      case RANDOM_ANGLE_MESSAGE:
+        if(rotation_amount == 0.0)
+        {
+          rotation_amount = (sa_payload & 0x7F) * M_PI / 127.0;
+          if (((sa_payload >> 7) & 0x01) == 0){
+            rotation_direction = LEFT;
+          }
+          else{
+            rotation_direction = RIGHT;
+          }
 
-        current_motion_type = RANDOM_ROTATION;
-      }
-
-      else if(sa_type==BIAS_MESSAGE && rotation_amount == 0.0){
-        rotation_amount = (sa_payload & 0x7F) * M_PI / 127.0;
-        if (((sa_payload >> 7) & 0x01) == 0){
-          rotation_direction = LEFT;
+          current_motion_type = RANDOM_ROTATION;
         }
-        else{
-          rotation_direction = RIGHT;
-        }
-
-        current_motion_type = POINTING_HOME;
+        break;
+      
+      default:
+        break;
       }
 
       new_sa_msg = false;
     }
-
     break;
   }
 
@@ -491,8 +457,10 @@ void message_rx(message_t *msg, distance_measurement_t *d) {
       new_information = true;
       if (current_state != DISCOVERED_TARGET)
       {
-        update_state(COMMUNICATED_TARGET);
-        set_color(RGB(0, 3, 0));
+        if (current_state == WAITING_BIAS)
+          current_state_backup = COMMUNICATED_TARGET;
+        else
+          update_state(COMMUNICATED_TARGET);
       }
     }
     break;
@@ -537,7 +505,7 @@ void random_walk()
 
         if(rotation_amount != 0.0) {
           rotation_amount = 0.0;
-          current_state = current_state_backup;
+          recover_state();
           straight_ticks = (uint32_t)(fabs(levy(std_motion_steps, levy_exponent)));
         }
 
@@ -573,9 +541,7 @@ void random_walk()
            so if you want evaluate the 20% (100/5) --> ~= 51 (254/5)
         */
         if(rand_soft() < 255/5 && openSpace_exp){
-          current_state_backup = current_state;
           update_state(WAITING_BIAS);
-          set_color(RGB(0,0,3));
           set_motion(STOP);
           // printf("Waiting for the angle\n");
         }

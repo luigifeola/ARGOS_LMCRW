@@ -6,9 +6,9 @@
     <!-- ************************* -->
     <framework>
         <system threads="4" />
-        <experiment length="1800"
+        <experiment length="__TIMEEXPERIMENT__"
         ticks_per_second="10"
-        random_seed="3241548" />
+        random_seed="__SEED__" />
     </framework>
     
     <!-- *************** -->
@@ -51,19 +51,19 @@
 
         <!-- experiment could be "simple_experiment" "bouncing" "random_angle" "open_space" -->
         <variables
-            crw = "0.9"
-            levy = "1.2"
-            datafilename="time_stats.txt"
-            positionsfilename="kiloLog.txt"
             dataacquisitionfrequency="100"  
             environmentplotupdatefrequency="1"
             timeforonemessage="0.05"
-            experiment="open_space"
-            kDistanceKilobotsFromTheOrigin="1.0">
+            crw = "__CRW__"
+            levy = "__LEVY__"
+            experiment="__EXPERIMENT__"
+            kDistanceKilobotsFromTheOrigin="__KILODISTANCE__"
+            datafilename="__TIMESTATS__"
+            positionsfilename="__KILOLOG__">
         </variables>
     
         <environments>
-            <Target position="0,0" radius="0.033" originDistance="0.25" color="255,0,0,125" >
+            <Target position="0,0" radius="0.033" originDistance="__TARGETDISTANCE__" color="255,0,0,125" >
             </Target>
             <Perimeter radius="0.5" width="0.01" height="0.05" walls="100">
             </Perimeter>
@@ -75,13 +75,13 @@
     <!-- *********************** -->
     <!-- * Arena configuration * -->
     <!-- *********************** -->
-    <arena size="40, 40, 4" center="0,0,0.5" pixel_per_meter="20">
+    <arena size="__ARENASIZE__" center="0,0,0.5" pixel_per_meter="20">
         
 
         <distribute>
             <position method="uniform" min="-0.4,-0.4,0" max="0.4,0.4,0" />
             <orientation method="uniform" min="0,0,0" max="360,0,0" />
-            <entity quantity="100" max_trials="100">
+            <entity quantity="__NUMROBOTS__" max_trials="100">
                 <kilobot id="kb">
                     <controller config="listener"/> <dynamics2d friction="0.7" />
                 </kilobot>
@@ -112,7 +112,7 @@
     <!-- ****************** -->
     <!-- * Visualization  * -->
     <!-- ****************** -->
-    <!-- <visualization>
+    <visualization>
         <qt-opengl>
             <camera>
                 <placement idx="0" position="0,-0.00001,.5" look_at="0,0,0" lens_focal_length="12" />
@@ -128,6 +128,6 @@
                 <placement idx="10" position="-0.0229259,-0.177184,0.0725521" look_at="-0.0273839,0.812385,0.0624333" lens_focal_length="20" />
             </camera>
         </qt-opengl>
-    </visualization> -->
+    </visualization>
     
 </argos-configuration>

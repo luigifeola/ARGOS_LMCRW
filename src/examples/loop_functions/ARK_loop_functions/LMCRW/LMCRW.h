@@ -74,6 +74,9 @@ public:
     /** Log Kilobot pose and state */
     void KiloLOG();
 
+    /** Log Kilobot convergence and first-passage time */
+    void TimeStatsLOG();
+
     /** Setup the initial state of the Kilobots in the space */
     void SetupInitialKilobotStates();
 
@@ -151,7 +154,7 @@ private:
         STATE_MESSAGE=0,
         PROXIMITY_MESSAGE=1,
         RANDOM_ANGLE_MESSAGE=2,
-        BIAS_MESSAGE=3,
+        PARAMETER_MESSAGE=3,
     } MESSAGE_TYPE;
 
 

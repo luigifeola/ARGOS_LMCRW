@@ -2,10 +2,10 @@
 
 ### How it works for me ###
 # in ARGoS folder run the following:
-# ./src/examples/experiments/batch/bouncing_angle.sh /src/examples/experiments/batch closed_space.argos
+# ./src/examples/experiments/batch/open_space.sh /src/examples/experiments/batch closed_space.argos
 
 if [ "$#" -ne 2 ]; then
-    echo "Usage: bouncing_angle.sh (from src folder) <base_config_dir> <base_config_file_name>"
+    echo "Usage: open_space.sh (from src folder) <base_config_dir> <base_config_file_name>"
     exit 11
 fi
 
@@ -20,7 +20,7 @@ if [ ! -e $base_config ]; then
     fi
 fi
 
-res_dir=$wdir/"results/bouncing_angle"
+res_dir=$wdir/"results/open_space"
 if [[ ! -e $res_dir ]]; then
     mkdir $res_dir
     echo "mkdir: directory '$res_dir' "
@@ -37,11 +37,14 @@ echo "$CONFIGURATION_FILE" | egrep "^$SHARED_DIR" &> /dev/null || exit 1
 #################################
 # experiment_length is in seconds
 #################################
-experiment_length="180"
+experiment_length="1800"
 date_time=`date "+%Y-%m-%d"`
-experiment_type="bouncing"
+experiment_type="open_space"
+target_distance="0.5"
+kilobot_distance="0.25"
 
 # TEST
+# experiment_length="180"
 # RUNS=1
 # numrobots="10"
 # levy="1.2 1.4"
@@ -53,7 +56,7 @@ numrobots="10 20 50 100"
 levy="1.2 1.4 1.6 1.8 2.0"
 crw="0.0 0.3 0.6 0.9"
 
-arenaSize="1, 1, 4"
+arenaSize="40, 40, 4"
 
 for nrob in $numrobots; do
     for par1 in $levy; do
@@ -73,6 +76,8 @@ for nrob in $numrobots; do
                 sed -i "s|__CRW__|$par2|g" $config
                 sed -i "s|__LEVY__|$par1|g" $config
                 sed -i "s|__EXPERIMENT__|$experiment_type|g" $config
+                sed -i "s|__TARGETDISTANCE__|$target_distance|g" $config
+                sed -i "s|__KILODISTANCE__|$kilobot_distance|g" $config
                 sed -i "s|__ARENASIZE__|$arenaSize|g" $config
                 sed -i "s|__NUMROBOTS__|$nrob|g" $config
                 

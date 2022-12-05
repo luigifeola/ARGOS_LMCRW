@@ -6,6 +6,7 @@ namespace
 {
     const double kKiloDiameter = 0.033;
     const double kEpsilon = 0.005;
+    const double smallThreshold = 0.02;
 
     /* walla voidance parameters */
     double vArena_size = -1.0;
@@ -104,13 +105,13 @@ void LMCRW::SetupInitialKilobotStates() {
     
     do{
         c_random_angle = c_rng->Uniform(CRange<Real>(-CRadians::PI.GetValue(), CRadians::PI.GetValue()));
-        c_position.SetX(c_rng->Uniform(CRange<Real>(min_distance, max_distance))  * sin(c_random_angle));
+        c_position.SetX(c_rng->Uniform(CRange<Real>(min_distance, max_distance)) * sin(c_random_angle));
         c_position.SetY(c_rng->Uniform(CRange<Real>(min_distance, max_distance)) * cos(c_random_angle));
         
         //check if there is some kilobot on top of the target
         kilobot_on_the_top = 
         std::find_if(m_vecKilobotsPositions.begin(), m_vecKilobotsPositions.end(), [&c_position, &c_radius](CVector2 const &position) {
-            return Distance(c_position, position) < (c_radius + kEpsilon) ;
+            return Distance(c_position, position) < (c_radius + smallThreshold) ;
             });
         
     }while(kilobot_on_the_top != m_vecKilobotsPositions.end());
@@ -123,7 +124,7 @@ void LMCRW::SetupInitialKilobotStates() {
 
 void LMCRW::SetupInitialKilobotState(CKilobotEntity &c_kilobot_entity){
     /* The kilobots begins outside the clustering hub*/
-    UInt8 unKilobotID=GetKilobotId(c_kilobot_entity);
+    UInt16 unKilobotID=GetKilobotId(c_kilobot_entity);
     m_vecKilobotStates[unKilobotID] = NOT_TARGET_FOUND;
     m_vecLastTimeMessaged[unKilobotID] = -1000;
 
@@ -254,7 +255,7 @@ void LMCRW::GetExperimentVariables(TConfigurationNode& t_tree){
 
 void LMCRW::UpdateKilobotState(CKilobotEntity &c_kilobot_entity){
     /* Update the state of the kilobots (target not found, found directly or communicated)*/
-    UInt8 unKilobotID=GetKilobotId(c_kilobot_entity);
+    UInt16 unKilobotID=GetKilobotId(c_kilobot_entity);
 
 
     m_vecKilobotsPositions[unKilobotID] = GetKilobotPosition(c_kilobot_entity);
@@ -269,7 +270,7 @@ void LMCRW::UpdateKilobotState(CKilobotEntity &c_kilobot_entity){
         if(m_vecFirstPassageTime[unKilobotID] == -1)
         {
             m_vecFirstPassageTime[unKilobotID] = m_fTimeInSeconds;
-            std::cout<< "kID: " << unKilobotID << " found target at time: " << m_fTimeInSeconds << std::endl;
+            // std::cout<< "kID: " << unKilobotID << " found target at time: " << m_fTimeInSeconds << std::endl;
         }
         if(m_vecConvergenceTime[unKilobotID] == -1)
         {
@@ -280,9 +281,8 @@ void LMCRW::UpdateKilobotState(CKilobotEntity &c_kilobot_entity){
         if(m_vecConvergenceTime[unKilobotID] == -1)
         {
             m_vecConvergenceTime[unKilobotID] = m_fTimeInSeconds;
-            std::cout<< "kID: " << unKilobotID << " received info about the target at time: " << m_fTimeInSeconds << std::endl;
+            // std::cout<< "kID: " << unKilobotID << " received info about the target at time: " << m_fTimeInSeconds << std::endl;
         }
-        
         break;
     
     default:
@@ -340,141 +340,145 @@ void LMCRW::UpdateVirtualSensor(CKilobotEntity &c_kilobot_entity){
     /*Create ARK-type messages variables*/
     m_tALFKilobotMessage tKilobotMessage,tEmptyMessage,tMessage;
     /* Get the kilobot ID and state (Only Position in this example) */
-    UInt8 unKilobotID=GetKilobotId(c_kilobot_entity);
+    UInt16 unKilobotID=GetKilobotId(c_kilobot_entity);
     
     // Prepare an empty ARK-type message to fill the gap in the full kilobot message
-    tEmptyMessage.m_sID=1023;
+    tEmptyMessage.m_sID=511;
     tEmptyMessage.m_sType=0;
     tEmptyMessage.m_sData=0;
 
     tKilobotMessage = tEmptyMessage;
 
-
-    // if (m_fTimeInSeconds - m_vecLastTimeMessaged[unKilobotID] < m_fMinTimeBetweenTwoMsg)
-    // {
-    //     return;
-    // }
-
-    // TODO: check the following line
-    m_tMessages[unKilobotID].type = 0;
+    if (m_fTimeInSeconds - m_vecLastTimeMessaged[unKilobotID] < m_fMinTimeBetweenTwoMsg)
+    {
+        return;
+    }
 
     /* if the experiment is not started yet, send alpha and rho parameters */
     if(!experiment_started)
     {
-        m_tMessages[unKilobotID].type = 2;
-
+        /* config message data (10 bit)
+            orrrraaaaa
+            o = open space flag
+            r = rho
+            a = alpha
+        */
         // Messages of parameters (crw, levy)
         UInt8 crw = (UInt8)(crw_exponent*10);
-        UInt8 levy = (UInt8)(levy_exponent*10);        
+        UInt8 levy = (UInt8)(levy_exponent*10);   
 
         tKilobotMessage.m_sID = unKilobotID;
-        tKilobotMessage.m_sData = (crw << 5);
+        // std::cout<< m_fTimeInSeconds << " tKilobotMessage.m_sID: " << tKilobotMessage.m_sID << std::endl;
+        tKilobotMessage.m_sType = PARAMETER_MESSAGE;
+        if(exp_type == "open_space"){
+            tKilobotMessage.m_sData = 1 << 9;
+        }
+        tKilobotMessage.m_sData = tKilobotMessage.m_sData | (crw & 0x0F) << 5;
         tKilobotMessage.m_sData = tKilobotMessage.m_sData | levy;
-        if(exp_type == "open_space")
-            tKilobotMessage.m_sType =  2;
-        else
-            tKilobotMessage.m_sType =  3;
 
         // std::cout<< "rho: " << crw << "alpha: " << levy << std::endl;
-        std::cout<< "kID: " << unKilobotID << " exp_type: " << exp_type << "m_sType: " << tKilobotMessage.m_sType << std::endl;
+        // std::cout<< "kID: " << unKilobotID << " exp_type: " << exp_type << "m_sType: " << tKilobotMessage.m_sType << std::endl;
     }
+
+    else{
     
 
-    /* if the kilobot finds directly or because communicated by other robots*/
-    else if(GetKilobotLedColor(c_kilobot_entity) != CColor::RED && m_vecKilobotStates[unKilobotID]==TARGET_FOUND) 
-    {
-        tKilobotMessage.m_sID = unKilobotID;
-        tKilobotMessage.m_sType = STATE_MESSAGE;
-        tKilobotMessage.m_sData = 0;
-    }
-
-    else if(GetKilobotLedColor(c_kilobot_entity) == CColor::GREEN)
-    {
-        m_vecKilobotStates[unKilobotID] = TARGET_COMMUNICATED;
-    }
-
-
-    /********* WALL AVOIDANCE PROCEDURE *************/
-    UInt8 proximity_sensor_dec = 0; //8 bit proximity sensor as decimal
-    Real fDistance = Distance(m_vecKilobotsPositions[unKilobotID], CVector2(0,0));
-    // std::cerr<<"fDistance: "<<fDistance<<std::endl;
-    // std::cerr<<"vDistance_threshold: "<<vDistance_threshold<<std::endl;
-
-    if (fDistance > vDistance_threshold && exp_type!="simple_experiment" && exp_type != "open_space")
-    {
-        /************************************************************************************************************************/
-        /** Bouncing ANGLE*/
-        if(exp_type == "bouncing"){
-            std::vector<int> proximity_vec;
-            CRadians collision_angle = ATan2(m_vecKilobotsPositions[unKilobotID].GetY(), m_vecKilobotsPositions[unKilobotID].GetX());
-            CVector2 collision_direction = CVector2(vDistance_threshold * Cos(collision_angle + CRadians(M_PI)), vDistance_threshold * Sin(collision_angle + CRadians(M_PI))).Normalize();
-            proximity_vec = Proximity_sensor(collision_direction, m_vecKilobotsOrientations[unKilobotID].GetValue(), kProximity_bits);
-            proximity_sensor_dec = std::accumulate(proximity_vec.begin(), proximity_vec.end(), 0, [](int x, int y)
-                                                { return (x << 1) + y; });
-            /* To turn off the wall avoidance uncomment the following line */
-            //proximity_sensor_dec = 0;
-
-            /** Print proximity values */
-            // std::cerr << "kID:" << unKilobotID << " sensor ";
-            // for (int item : proximity_vec)
-            // {
-            //     std::cout << item << '\t';
-            // }
-            // std::cout << std::endl;
-
-            // std::cout<<"******Prox dec: "<<proximity_sensor_dec<<std::endl;
-            
+        /* if the kilobot finds directly or because communicated by other robots*/
+        if(GetKilobotLedColor(c_kilobot_entity) != CColor::RED && m_vecKilobotStates[unKilobotID]==TARGET_FOUND) 
+        {
             tKilobotMessage.m_sID = unKilobotID;
-            tKilobotMessage.m_sType = PROXIMITY_MESSAGE;
-            tKilobotMessage.m_sData = proximity_sensor_dec;
+            tKilobotMessage.m_sType = STATE_MESSAGE;
+            tKilobotMessage.m_sData = 0;
         }
-        /************************************************************************************************************************/
 
-        /************************************************************************************************************************/
-        /** RANDOM ANGLE */
-        else if (exp_type == "random_angle") {
-            CRadians home_angle = ATan2(-m_vecKilobotsPositions[unKilobotID].GetY(), -m_vecKilobotsPositions[unKilobotID].GetX()) - m_vecKilobotsOrientations[unKilobotID];
-            // std::cout << "random_angle: " << random_angle.RADIANS_TO_DEGREES << '\t';
-            CRadians random_angle = CRadians(c_rng->Uniform(CRange<Real>(-CRadians::PI_OVER_TWO.GetValue(), CRadians::PI_OVER_TWO.GetValue())));
-            random_angle += home_angle;
-            random_angle.SignedNormalize(); //map angle in [-pi,pi]
+        else if(GetKilobotLedColor(c_kilobot_entity) == CColor::GREEN)
+        {
+            m_vecKilobotStates[unKilobotID] = TARGET_COMMUNICATED;
+        }
 
-            if(home_angle.SignedNormalize().GetAbsoluteValue() > M_PI_2) // check for collision considering robot direction
-            {
+
+        /********* WALL AVOIDANCE PROCEDURE *************/
+        UInt8 proximity_sensor_dec = 0; //8 bit proximity sensor as decimal
+        Real fDistance = Distance(m_vecKilobotsPositions[unKilobotID], CVector2(0,0));
+        // std::cerr<<"fDistance: "<<fDistance<<std::endl;
+        // std::cerr<<"vDistance_threshold: "<<vDistance_threshold<<std::endl;
+
+        if (fDistance > vDistance_threshold && exp_type!="simple_experiment" && exp_type != "open_space")
+        {
+            /************************************************************************************************************************/
+            /** Bouncing ANGLE*/
+            if(exp_type == "bouncing"){
+                std::vector<int> proximity_vec;
+                CRadians collision_angle = ATan2(m_vecKilobotsPositions[unKilobotID].GetY(), m_vecKilobotsPositions[unKilobotID].GetX());
+                CVector2 collision_direction = CVector2(vDistance_threshold * Cos(collision_angle + CRadians(M_PI)), vDistance_threshold * Sin(collision_angle + CRadians(M_PI))).Normalize();
+                proximity_vec = Proximity_sensor(collision_direction, m_vecKilobotsOrientations[unKilobotID].GetValue(), kProximity_bits);
+                proximity_sensor_dec = std::accumulate(proximity_vec.begin(), proximity_vec.end(), 0, [](int x, int y)
+                                                    { return (x << 1) + y; });
+                /* To turn off the wall avoidance uncomment the following line */
+                //proximity_sensor_dec = 0;
+
+                /** Print proximity values */
+                // std::cerr << "kID:" << unKilobotID << " sensor ";
+                // for (int item : proximity_vec)
+                // {
+                //     std::cout << item << '\t';
+                // }
+                // std::cout << std::endl;
+
+                // std::cout<<"******Prox dec: "<<proximity_sensor_dec<<std::endl;
+                
                 tKilobotMessage.m_sID = unKilobotID;
-                tKilobotMessage.m_sType = RANDOM_ANGLE_MESSAGE;
+                tKilobotMessage.m_sType = PROXIMITY_MESSAGE;
+                tKilobotMessage.m_sData = proximity_sensor_dec;
+            }
+            /************************************************************************************************************************/
 
-                if(random_angle.GetValue() >= 0)
-                    tKilobotMessage.m_sData = (UInt8) round ((127.0 / M_PI) * random_angle.GetValue());
-                else
+            /************************************************************************************************************************/
+            /** RANDOM ANGLE */
+            else if (exp_type == "random_angle") {
+                CRadians home_angle = ATan2(-m_vecKilobotsPositions[unKilobotID].GetY(), -m_vecKilobotsPositions[unKilobotID].GetX()) - m_vecKilobotsOrientations[unKilobotID];
+                // std::cout << "random_angle: " << random_angle.RADIANS_TO_DEGREES << '\t';
+                CRadians random_angle = CRadians(c_rng->Uniform(CRange<Real>(-CRadians::PI_OVER_TWO.GetValue(), CRadians::PI_OVER_TWO.GetValue())));
+                random_angle += home_angle;
+                random_angle.SignedNormalize(); //map angle in [-pi,pi]
+
+                if(home_angle.SignedNormalize().GetAbsoluteValue() > M_PI_2) // check for collision considering robot direction
                 {
-                    tKilobotMessage.m_sData = (UInt8) round ((127.0 / M_PI) * random_angle.GetAbsoluteValue());
-                    tKilobotMessage.m_sData = tKilobotMessage.m_sData | 1 << 7;
+                    tKilobotMessage.m_sID = unKilobotID;
+                    tKilobotMessage.m_sType = RANDOM_ANGLE_MESSAGE;
+
+                    if(random_angle.GetValue() >= 0)
+                        tKilobotMessage.m_sData = (UInt8) round ((127.0 / M_PI) * random_angle.GetValue());
+                    else
+                    {
+                        tKilobotMessage.m_sData = (UInt8) round ((127.0 / M_PI) * random_angle.GetAbsoluteValue());
+                        tKilobotMessage.m_sData = tKilobotMessage.m_sData | 1 << 7;
+                    }
                 }
             }
-        }
-        /************************************************************************************************************************/
+            /************************************************************************************************************************/
 
-        else{
-            std::cout<<"****WARNING!!***\n" << exp_type << " is a NOT EXISTING experiment!!!\n";
-        }
-    }
-
-    if (GetKilobotLedColor(c_kilobot_entity) == CColor::BLUE && exp_type == "open_space") {
-        // std::cout<< "Open space experiment\n";
-        CRadians home_angle = ATan2(-m_vecKilobotsPositions[unKilobotID].GetY(), -m_vecKilobotsPositions[unKilobotID].GetX()) - m_vecKilobotsOrientations[unKilobotID];
-        home_angle.SignedNormalize(); //map angle in [-pi,pi]
-        tKilobotMessage.m_sID = unKilobotID;
-        tKilobotMessage.m_sType = BIAS_MESSAGE;
-
-        if(home_angle.GetValue() >= 0)
-            tKilobotMessage.m_sData = (UInt8) round ((127.0 / M_PI) * home_angle.GetValue());
-        else
-        {
-            tKilobotMessage.m_sData = (UInt8) round ((127.0 / M_PI) * home_angle.GetAbsoluteValue());
-            tKilobotMessage.m_sData = tKilobotMessage.m_sData | 1 << 7;
+            else{
+                std::cout<<"****WARNING!!***\n" << exp_type << " is a NOT EXISTING experiment!!!\n";
+            }
         }
 
+        if (GetKilobotLedColor(c_kilobot_entity) == CColor::BLUE && exp_type == "open_space") {
+            // std::cout<< "Open space experiment\n";
+            CRadians home_angle = ATan2(-m_vecKilobotsPositions[unKilobotID].GetY(), -m_vecKilobotsPositions[unKilobotID].GetX()) - m_vecKilobotsOrientations[unKilobotID];
+            home_angle.SignedNormalize(); //map angle in [-pi,pi]
+            tKilobotMessage.m_sID = unKilobotID;
+            tKilobotMessage.m_sType = RANDOM_ANGLE_MESSAGE;
+
+            if(home_angle.GetValue() >= 0)
+                tKilobotMessage.m_sData = (UInt8) round ((127.0 / M_PI) * home_angle.GetValue());
+            else
+            {
+                tKilobotMessage.m_sData = (UInt8) round ((127.0 / M_PI) * home_angle.GetAbsoluteValue());
+                tKilobotMessage.m_sData = tKilobotMessage.m_sData | 1 << 7;
+            }
+
+        }
     }
 
     /** 
@@ -523,6 +527,7 @@ void LMCRW::PostStep()
     if (internal_counter % m_unDataAcquisitionFrequency == 0 || internal_counter <= 1)
     {
         KiloLOG();
+        TimeStatsLOG();
     }
 
 }
@@ -533,7 +538,33 @@ void LMCRW::PostStep()
 
 void LMCRW::PostExperiment()
 {
-    std::cout << "END "<< m_fTimeInSeconds <<"\n";
+    std::cout << "END after "<< m_fTimeInSeconds <<"s\n";
+    std::cout << exp_type 
+              << ", nrobot: "<< m_vecKilobotsPositions.size() 
+              << ", alpha: "<< levy_exponent 
+              << ", rho: " << crw_exponent<< "\n";
+}
+
+
+/****************************************/
+/****************************************/
+
+
+void LMCRW::TimeStatsLOG()
+{
+    m_timeStatsOutputs
+        << std::noshowpos << std::setw(4) << std::setprecision(0) << std::setfill('0')
+        << m_fTimeInSeconds << '\t';
+    for (size_t kID = 0; kID < m_vecKilobotsPositions.size(); kID++)
+    {
+        m_timeStatsOutputs
+            << std::showpos << std::setw(8) << std::setprecision(2) << std::setfill('0') << std::fixed
+            << m_vecConvergenceTime[kID] << '\t'
+            << std::showpos << std::setw(8) << std::setprecision(2) << std::setfill('0') << std::fixed
+            << m_vecFirstPassageTime[kID] << '\t';
+    }
+    m_timeStatsOutputs << std::endl;
+    
 }
 
 
@@ -560,10 +591,8 @@ void LMCRW::KiloLOG()
             << m_vecKilobotsPositions[kID].GetY() << '\t'
             << std::internal << std::showpos << std::setw(6) << std::setprecision(4) << std::setfill('0') << std::fixed
             << m_vecKilobotsOrientations[kID].GetValue() << '\t'
-            << std::noshowpos << std::setw(6) << std::setprecision(1) << std::setfill('0')
-            << m_vecConvergenceTime[kID] << '\t'
-            << std::noshowpos << std::setw(6) << std::setprecision(1) << std::setfill('0')
-            << m_vecFirstPassageTime[kID] << '\t';
+            << std::noshowpos << std::setw(2) << std::setprecision(0) << std::setfill('0')
+            << m_vecKilobotStates[kID] << '\t';
     }
     m_kiloOutput << std::endl;
 }
@@ -573,7 +602,7 @@ void LMCRW::KiloLOG()
 
 void LMCRW::PrintKilobotState(CKilobotEntity& c_kilobot_entity)
 {
-    UInt8 unKilobotID=GetKilobotId(c_kilobot_entity);
+    UInt16 unKilobotID=GetKilobotId(c_kilobot_entity);
 
     std::cerr<<"Actual state:";
     switch (m_vecKilobotStates[unKilobotID])
