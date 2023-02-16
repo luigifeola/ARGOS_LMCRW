@@ -2,7 +2,7 @@
 
 ### How it works for me ###
 # in ARGoS folder run the following:
-# ./src/examples/experiments/batch/open_space_target100cm.sh /src/examples/experiments/batch closed_space.argos
+# ./src/examples/experiments/batch/open_space_kiloDistance100cm.sh /src/examples/experiments/batch open_space.argos
 
 if [ "$#" -ne 2 ]; then
     echo "Usage: open_space_target100cm.sh (from src folder) <base_config_dir> <base_config_file_name>"
@@ -45,17 +45,17 @@ kilobot_distance="1.0"
 
 # TEST
 # experiment_length="180"
-# RUNS=1
-# numrobots="10"
-# levy="1.2 1.4"
-# crw="0.0 0.3"
+RUNS=1
+numrobots="100"
+levy="1.2 1.4"
+crw="0.0 0.9"
 # arenaSize="5, 5, 4"
 
 # FINAL
-RUNS=100
-numrobots="10 20 50 100"
-levy="1.2 1.4 1.6 1.8 2.0"
-crw="0.0 0.3 0.6 0.9"
+# RUNS=100
+# numrobots="10 20 50 100"
+# levy="1.2 1.4 1.6 1.8 2.0"
+# crw="0.0 0.3 0.6 0.9"
 arenaSize="40, 40, 4"
 
 

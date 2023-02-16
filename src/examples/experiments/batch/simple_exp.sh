@@ -37,12 +37,14 @@ echo "$CONFIGURATION_FILE" | egrep "^$SHARED_DIR" &> /dev/null || exit 1
 #################################
 # experiment_length is in seconds
 #################################
-experiment_length="180"
+experiment_length="1800"
 date_time=`date "+%Y-%m-%d"`
 experiment_type="simple_experiment"
 RUNS=100
-numrobots="10 20 50 100"
+# numrobots="10 20 50 100"
 levy="1.2 1.4 1.6 1.8 2.0"
+numrobots="100"
+# levy="1.8 2.0"
 crw="0.0 0.3 0.6 0.9"
 arenaSize="1, 1, 4"
 

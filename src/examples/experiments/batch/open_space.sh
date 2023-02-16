@@ -46,13 +46,13 @@ kilobot_distance="0.25"
 # TEST
 # experiment_length="180"
 # RUNS=1
-# numrobots="10"
+numrobots="100"
 # levy="1.2 1.4"
 # crw="0.0 0.3"
 
 # FINAL
 RUNS=100
-numrobots="10 20 50 100"
+# numrobots="10 20 50 100"
 levy="1.2 1.4 1.6 1.8 2.0"
 crw="0.0 0.3 0.6 0.9"
 
